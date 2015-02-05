@@ -1,4 +1,4 @@
-#! /usr/bin/which python
+#!/usr/bin/env python
 
 # mpdsync.py
 # Written by Nick Pegg
