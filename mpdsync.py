@@ -8,8 +8,10 @@
 # playback between my living room and my garage
 
 import json
+import os
 import re
 import time
+from xdg import BaseDirectory
 
 import mpd  # Requires the python-mpd library
 
@@ -92,9 +94,9 @@ def main():
         sync(master, slaves)
         
     
-def get_settings(settings_file="settings.json"):
+def get_settings(settings_file=os.path.join(BaseDirectory.xdg_config_home, "mpdsync.json")):
     """ 
-    Gets the settings from the settings file (settings.json by default)
+    Gets the settings from the settings file (~/.config/mpdsync.json by default)
     and makes sure that everything's kosher.
     """
     
