@@ -8,6 +8,7 @@
 # playback between my living room and my garage
 
 import json
+import re
 import time
 
 import mpd  # Requires the python-mpd library
@@ -165,12 +166,14 @@ def full_sync(master, slaves):
     print(status)
     
     # Clear the slave playlists and copy the masters
+    file_prefix_re = re.compile('^file: ')
     playlist = master.client.playlist()
     print playlist
     for slave in slaves:
         slave.client.clear()
-        
+
         for song in playlist:
+            song = file_prefix_re.sub('', song)
             slave.client.add(song)
             print(song)
             
