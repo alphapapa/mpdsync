@@ -1,212 +1,266 @@
 #!/usr/bin/env python
 
 # mpdsync.py
-# Written by Nick Pegg
+# Originally written by Nick Pegg
+# Rewritten and updated to use python-mpd2 by Adam Porter <adam@alphapapa.net>
 
-# An MPD client which syncs multiple MPD servers, providing they have the same 
-# copy of the database. I created this because I needed a way to sync music 
-# playback between my living room and my garage
-
-import json
+import argparse
+import logging as log
 import os
 import re
+import sys
 import time
-from xdg import BaseDirectory
 
-import mpd  # Requires the python-mpd library
+from mpd import MPDClient  # using python-mpd2
 
+# TODO: Verify python-mpd2 is being used
 
-class MPDClient():
-    """ Simple wrapper class for mpd.MPDClient to hold server info """
-    client = None
-    host = None
-    port = None
-    password = None
-    
-    plversion = 0   # MPD playlist version. Used to get playlist diffs
-    volume_diff = 0 # Difference in volume between this client and the master
-    
-    
-    def __init__(self, host, port=6600, password=None):
-        self.client = mpd.MPDClient()
-        self.host = host
-        self.port = port
-        self.password = password
-    
+DEFAULT_PORT = 6600
+FILE_PREFIX_RE = re.compile('^file: ')
+
+class client(MPDClient):
+
+    def __init__(self, info=None):
+        super(client, self).__init__()
+        self.host = 'localhost'
+        self.port = DEFAULT_PORT
+        self.password = None
+
+        self.currentStatus = None
+        self.playlist = None
+        self.playlistLength = None
+        self.playlistVersion = None
+
+        self.song = None
+
+        self.consume = False
+        self.random = False
+        self.repeat = False
+        self.single = False
+
+        self.state = None
+        self.playing = None
+        self.paused = None
+
+        self.elapsed = None
+
+        self.volume = None
+        
     def connect(self):
-        ret = True
-    
-        # Forcibly make sure we aren't connected first
-        try:
-            self.client.disconnect()
-        except:
-            pass      
-        
-        try:
-            self.client.connect(self.host, self.port)
-            
-            if self.password is not None:
-                self.client.password(self.password)
-        
-        except:
-            print("Error: Unable to connect to the server")
-            print("\tHost: %s, Port: %d" % (self.host, str(self.port)))
-            ret = False
-            
-        return ret
-        
-    def check_connection(self):
-        try:
-            self.client.ping()
-            return True
-        except mpd.ConnectionError:
-            return self.connect()            
+        super(client, self).connect(self.host, self.port)
 
+        if self.password:
+            super(client, self).password(self.password)
+
+    def getPlaylist(self):
+        self.playlist = super(client, self).playlist()
+
+    def status(self):
+        self.currentStatus = super(client, self).status()
+
+        self.playlistLength = int(self.currentStatus['playlistlength'])
+        self.playlistVersion = self.currentStatus['playlist']
+
+        self.song = self.currentStatus['song'] if 'song' in self.currentStatus else None
+        
+        self.consume = True if self.currentStatus['consume'] == '1' else False
+        self.random = True if self.currentStatus['random'] == '1' else False
+        self.repeat = True if self.currentStatus['repeat'] == '1' else False
+        self.single = True if self.currentStatus['single'] == '1' else False
+
+        self.state = self.currentStatus['state']
+        self.playing = True if self.state == 'play' else False
+        self.paused = True if self.state == 'pause' else False
+
+        self.elapsed = round(float(self.currentStatus['elapsed']), 3) if 'elapsed' in self.currentStatus else None
+
+        # TODO: Add other attributes, e.g. {'playlistlength': '55',
+        # 'playlist': '3868', 'repeat': '0', 'consume': '0',
+        # 'mixrampdb': '0.000000', 'random': '0', 'state': 'stop',
+        # 'volume': '-1', 'single': '0'}
 
 def main():
-    settings = get_settings() 
-        
-    # Connect to the master and slaves
-    m = settings['servers']['master']
-    master = MPDClient(m['host'], m['port'], m['password'])
-    master.connect()
-    print("Connected to master %s:%d" % (m['host'], m['port']))
-    
-    slaves = list()
-    for slave in settings['servers']['slaves']:
-        slave_client = MPDClient(slave['host'], slave['port'], slave['password'])
-        
-        if slave_client.connect():
-            print("Connected to slave %s:%d" % (slave['host'], slave['port']))
-            slaves.append(slave_client)
-               
-    full_sync(master, slaves)
-    
-    # Wait for something to happen and sync the slaves 
-    # Note: sync() calls master.idle() which will block until something happens
-    # on the master server. No 
-    while True:
-        # Make sure that the master is alive
-        if not master.check_connection():
-            print("Error: Lost connection to master and couldn't get it back. Quitting.")
-            quit(-2)
-                
-        sync(master, slaves)
-        
-    
-def get_settings(settings_file=os.path.join(BaseDirectory.xdg_config_home, "mpdsync.json")):
-    """ 
-    Gets the settings from the settings file (~/.config/mpdsync.json by default)
-    and makes sure that everything's kosher.
-    """
-    
-    try:
-        settings = json.load(open(settings_file))
-    except:
-        print("Error: Unable to load settings file. Check that it's there and syntatically correct.")
-        print("For your reference, I tried to open " + str(settings_file))
-        quit(-1)
-        
-    if settings.get('servers') is None:
-        print("Error: No servers are defined in settings file")
-        quit(-1)        
-    elif settings['servers'].get('master') is None:
-        print("Error: No master server is defined in your settings file!")
-        quit(-1)
-    elif settings['servers'].get('slaves') is None :
-        print("Error: No slave servers are defined in your settings file!")
-        quit(-1)
-        
-    return settings
-    
-      
-def sync(master, slaves):
-    """ Syncs the slaves playlists to the master """
-    
-    # Wait for something to happen
-    subsystems = master.client.idle()
-    
-    # Make sure the clients are ready
-    for slave in slaves:
-        if not slave.check_connection():
-            print("Lost slave %s and was not able to reconnect." % slave.host)
-      
-    for subsystem in subsystems:
-        master_status = master.client.status()
-        master.plversion = master_status['playlist']
-        
-        for slave in slaves:
-            if subsystem == 'playlist':
-                # Get the difference in playlists
-                for change in master.client.plchanges(slave.plversion):
-                    slave.client.addid(change['file'], change['pos'])
-                
-                # Truncate the slave playlist to the same length as the master
-                # I had to iterate because python-mpd doesn't support 
-                # MPD's range deletion for whatever reason
-                m_length = int(master.client.status()['playlistlength'])
-                s_length = int(slave.client.status()['playlistlength'])
-                
-                while m_length != s_length:
-                    slave.client.delete(s_length - 1)
-                    s_length -= 1
-                
-                    
-                slave.plversion = int(master_status['playlist'])
-                
-            elif subsystem == 'player':
-                sync_player(master, slave)
-                
-            elif subsystem == 'mixer':
-                pass    # Future: raise/lower volume with the master
-            
-            
-def full_sync(master, slaves):
-    """ Do a full sync to copy the full state of the master to the slaves """
-    
-    status = master.client.status()
-    print(status)
-    
-    # Clear the slave playlists and copy the masters
-    file_prefix_re = re.compile('^file: ')
-    playlist = master.client.playlist()
-    print playlist
-    for slave in slaves:
-        slave.client.clear()
+    global master, slaves
 
-        for song in playlist:
-            song = file_prefix_re.sub('', song)
-            slave.client.add(song)
-            print(song)
-            
-        # Save this playlist version. We'll use this to determine what changes
-        # we need to make when we're out-of-date
-        slave.plversion = status['playlist']
+    # Parse args
+    parser = argparse.ArgumentParser(
+            description='Syncs two mpd servers.')
+    parser.add_argument('-m', '--master',
+                        dest='master',
+                        help='Address and port of master server in HOST:PORT format')
+    parser.add_argument('-s', '--slaves',
+                        dest="slaves", nargs='*',
+                        help='Address and port of slave servers in HOST:PORT format')
+    parser.add_argument('-p', '--password', default=None,
+                        dest="password",
+                        help='Password to connect to servers with')
+    parser.add_argument("-v", "--verbose", action="count", dest="verbose", help="Be verbose, up to -vv")
+    args = parser.parse_args()
+
+    # Setup logging
+    if args.verbose == 1:
+        LOG_LEVEL = log.INFO
+    elif args.verbose >=2:
+        LOG_LEVEL = log.DEBUG
+    else:
+        LOG_LEVEL = log.WARNING
+    log.basicConfig(level=LOG_LEVEL, format="%(levelname)s: %(message)s")
+	
+    log.debug("Args: %s" % args)
+
+    # Check args
+    if not args.master:
+        log.error("Please provide a master server with -m.")
+        return False
+
+    if not len(args.slaves) > 0:
+        log.error("Please provide at least one slave server with -c.")
+        return False
+
+    # Connect to the master server
+    master = client()
+    if ':' in args.master:
+        master.host, master.port = args.master.split(':')
+    else:
+        master.host = args.master
         
-        sync_player(master, slave) 
-        
-        slave.volume_diff = int(status['volume']) - int(slave.client.status()['volume'])
-        
-        print("Synced %s to master %s" % (slave.host, master.host))
-            
-            
-def sync_player(master, slave):
-    """ Syncs a slave's player status to the master """
-    status = master.client.status()
+    try:
+        master.connect()
+    except Exception as e:
+        log.error('Unable to connect to master server: %s' % e)
+        return False
     
-    if status['state'] == 'play':
-        slave.client.seek(status['song'], status['time'].split(':')[0])
-        slave.client.play()
-    elif status['state'] == 'pause':
-        slave.client.seek(status['song'], status['time'].split(':')[0])
+    log.debug('Connected to master server.')
+
+    # Connect to slaves
+    slaves = []
+    for slave in args.slaves:
+
+        slaveClient = client()
+        if ':' in slave:
+            slaveClient.host, slaveClient.port = slave.split(':')
+        else:
+            slaveClient.host = slave
         
-        if slave.client.status()['state'] == 'play':
-            slave.client.pause()
-    elif status['state'] == 'stop':
-        slave.client.stop()
+        try:
+            slaveClient.connect()
+        except Exception as e:
+            log.error('Unable to connect to slave "%s": %s' % (slave, e))
+        else:
+            log.debug('Connected to slave "%s".' % slave)
+            slaves.append(slaveClient)
+
+    # Sync master and slaves
+    syncAll()
+
+    # Enter sync loop
+    syncLoop()        
         
-   
+def syncLoop():
+    global master
+
+    while True:
+        # Wait for something to happen
+        subsystems = master.idle()
+
+        # Sync stuff
+        for subsystem in subsystems:
+            if subsystem == 'playlist':
+                syncPlaylists()
+            elif subsystem == 'player':
+                syncPlayers()  
+            elif subsystem == 'options':
+                syncOptions()
+
+def syncAll():
+    syncPlaylists()
+    syncOptions()
+    syncPlayers()
+    
+def syncPlaylists():
+    global master, slaves
+
+    # Get master info
+    master.status()
+    master.getPlaylist()
+
+    # Sync slaves
+    for slave in slaves:
+
+        if slave.playlistVersion is None:
+            # Do a full sync the first time
+
+            # Start command list
+            slave.command_list_ok_begin()
+            
+            # Clear playlist
+            slave.clear()
+
+            # Add tracks
+            for song in master.playlist:
+                slave.add(FILE_PREFIX_RE.sub('', song))
+
+            # Execute command list
+            results = slave.command_list_end()
+
+        else:
+            # Make changes
+            
+            # Get current status
+            slave.status()
+
+            # Start command list
+            slave.command_list_ok_begin()
+            
+            for change in master.plchanges(slave.playlistVersion):
+                log.debug("Making change: %s" % change)
+                
+                # Add new tracks
+                log.debug('Adding to slave:"%s" file:"%s" at pos:%s' % (slave.host, change['file'], change['pos']))
+                slave.addid(change['file'], change['pos'])
+
+            # Truncate the slave playlist to the same length as the master
+            if master.playlistLength > slave.playlistLength:
+                log.debug("Deleting from %s to %s" % (master.playlistLength, slave.playlistLength))
+                slave.delete((master.playlistLength, slave.playlistLength))
+
+            # Execute command list
+            results = slave.command_list_end()
+
+            # Check result
+            slave.status()
+            if slave.playlistLength != master.playlistLength:
+                log.error("Playlist lengths don't match: %s / %s" % (slave.playlistLength, master.playlistLength))
+
+            # Update slave playlist version number
+            slave.playlistVersion = master.playlistVersion
+
+def syncOptions():
+    global master, slaves
+
+    pass
+
+def syncPlayers():
+    global master, slaves
+
+    # Update master status
+    master.status()
+
+    for slave in slaves:
+        slave.status()
+
+        if slave.state != master.state:
+            if master.playing:
+                slave.play()
+            elif master.paused:
+                slave.pause()
+            else:
+                slave.stop()
+
+        # Seek to current playing position, adjusted for latency
+        if master.playing:
+            slave.seek(master.song, master.elapsed + 0.100)
     
 if __name__ == '__main__':
-    main()
+    sys.exit(main())
     
