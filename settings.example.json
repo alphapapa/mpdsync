@@ -1,9 +1,0 @@
-{
-    "servers": {
-        "master": {"host": "server1", "port": 6600, "password": "sekritpassword"}, 
-        "slaves": [
-            {"host": "server2", "port": 6600, "password": null},
-            {"host": "192.168.1.5", "port": 6600, "password": null}
-        ]
-    }
-}

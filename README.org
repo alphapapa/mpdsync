@@ -1,0 +1,44 @@
+* mpdsync
+=mpdsync= is a simple way to synchronize multiple MPD servers so that they're all playing the same thing, at the same time, with the same playlist.
+** Requirements
++ Two or more MPD servers (duh!) which have identical music databases, like a network share
++ Python 2.6+
++ [[https://pypi.python.org/pypi/python-mpd2][python-mpd2]] (This is a new fork of python-mpd, and it may not be in your distro's repo yet.  You can install it with =pip= (use the =--user= switch if you want to install it as a user instead of as root).
+** Setup
+One MPD server will be considered the master and all the others will be slaves.  Once that's taken care of, all you have to is run the =mpdsync.py= file!
+
+Upon startup, =mpdsync= will propagate the playlist and player state from the master to all of the slaves. Then =mpdsync= waits for the master server to do something, such as modify the playlist, and then makes the same changes to the slaves.
+** Examples
+Usage is very simple:
+
+#+BEGIN_SRC
+usage: mpdsync.py [-h] [-m MASTER] [-s [SLAVES [SLAVES ...]]] [-p PASSWORD]
+                  [-v]
+
+Syncs multiple mpd servers.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -m MASTER, --master MASTER
+                        Name or address of master server, optionally with port in HOST:PORT format
+  -s [SLAVES [SLAVES ...]], --slaves [SLAVES [SLAVES ...]]
+                        Name or address of slave servers, optionally with port in HOST:PORT format
+  -p PASSWORD, --password PASSWORD
+                        Password to connect to servers with
+  -v, --verbose         Be verbose, up to -vv
+#+END_SRC
+
+So if your master server were on the local machine, and you wanted to also play music on a machine in the kitchen and a machine in the basement, you would simply run:
+
+=mpdsync.py -m localhost -s kitchen basement=
+
+You can also use IP addresses instead of hostnames.
+                        
+** TODOs
++ Sync player settings (e.g. shuffle, repeat).  Simple, just haven't bothered yet...
++ Due to timing issues with a network and MPD's idle command, the music isn't perfectly synced. Hopefully this can be fixed without forking MPD.  It may be possible to use some simple calculations based on ping times to get close enough. For some interesting reading, see:
+    - https://snarfed.org/synchronizing_mp3_playback
+    - https://github.com/snarfed/p4sync
++ Adjusting the volume on the master ought to proportionally adjust the volume on all of the slaves
+** Credits
+=mpdsync= was originally written by Nick Pegg (https://github.com/nickpegg/mpdsync).

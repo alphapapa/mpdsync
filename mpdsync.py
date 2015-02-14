@@ -1,15 +1,17 @@
 #!/usr/bin/env python
 
 # mpdsync.py
-# Originally written by Nick Pegg
+# Originally written by Nick Pegg <https://github.com/nickpegg/mpdsync>
 # Rewritten and updated to use python-mpd2 by Adam Porter <adam@alphapapa.net>
+
+# TODO: Use a "master" and a "slave" subclass to handle the playlist
+# versioning more pythonically
 
 import argparse
 import logging as log
 import os
 import re
 import sys
-import time
 
 import mpd  # Using python-mpd2
 
@@ -48,8 +50,6 @@ class client(mpd.MPDClient):
         self.paused = None
 
         self.elapsed = None
-
-        self.volume = None
 
     def checkConnection(self):
         # I don't know why this is necessary, but for some reason the slave connections tend to get dropped.
@@ -105,13 +105,13 @@ def main():
 
     # Parse args
     parser = argparse.ArgumentParser(
-            description='Syncs two mpd servers.')
+            description='Syncs multiple mpd servers.')
     parser.add_argument('-m', '--master',
                         dest='master',
-                        help='Address and port of master server in HOST:PORT format')
+                        help='Name or address of master server, optionally with port in HOST:PORT format')
     parser.add_argument('-s', '--slaves',
                         dest="slaves", nargs='*',
-                        help='Address and port of slave servers in HOST:PORT format')
+                        help='Name or address of slave servers, optionally with port in HOST:PORT format')
     parser.add_argument('-p', '--password', default=None,
                         dest="password",
                         help='Password to connect to servers with')
@@ -135,7 +135,7 @@ def main():
         log.error("Please provide a master server with -m.")
         return False
 
-    if not len(args.slaves) > 0:
+    if not args.slaves:
         log.error("Please provide at least one slave server with -c.")
         return False
 
@@ -151,8 +151,8 @@ def main():
     except Exception as e:
         log.error('Unable to connect to master server: %s' % e)
         return False
-
-    log.debug('Connected to master server.')
+    else:
+        log.debug('Connected to master server.')
 
     # Connect to slaves
     slaves = []
@@ -172,6 +172,11 @@ def main():
             log.debug('Connected to slave "%s".' % slave)
             slaves.append(slaveClient)
 
+    # Make sure there is at least one slave connected
+    if not slaves:
+        log.error("Couldn't connect to any slaves.")
+        return False
+            
     # Sync master and slaves
     syncAll()
 
@@ -212,6 +217,8 @@ def syncPlaylists():
     # Sync slaves
     for slave in slaves:
 
+        # Reconnect if necessary (slave connections tend to drop for
+        # some reason)
         slave.checkConnection()
 
         if slave.slavePlaylistVersion is None:
@@ -228,13 +235,13 @@ def syncPlaylists():
                 slave.add(FILE_PREFIX_RE.sub('', song))
 
             # Execute command list
-            results = slave.command_list_end()
+            slave.command_list_end()
 
             # Update slave playlist version number
             slave.slavePlaylistVersion = master.playlistVersion
 
         else:
-            # Make changes
+            # Sync playlist changes
 
             # Start command list
             slave.command_list_ok_begin()
@@ -247,20 +254,15 @@ def syncPlaylists():
                 slave.addid(change['file'], change['pos'])
 
             # Execute command list
-            results = slave.command_list_end()
+            slave.command_list_end()
 
+            # Update slave info
             slave.status()
-
-            # Start command list
-            slave.command_list_ok_begin()
 
             # Truncate the slave playlist to the same length as the master
             if master.playlistLength < slave.playlistLength:
                 log.debug("Deleting from %s to %s" % (master.playlistLength - 1, slave.playlistLength - 1))
                 slave.delete((master.playlistLength - 1, slave.playlistLength - 1))
-
-            # Execute command list
-            results = slave.command_list_end()
 
             # Check result
             slave.status()
@@ -277,6 +279,7 @@ def syncPlaylists():
             if slave.state != master.state:
                 syncPlayer(slave)
 
+# TODO: THIS :)
 def syncOptions():
     global master, slaves
 
