@@ -297,6 +297,9 @@ def syncPlayers():
 def syncPlayer(slave):
     global master
 
+    # Reconnect if connection dropped
+    slave.checkConnection()
+    
     if master.playing:
         slave.play()
 
