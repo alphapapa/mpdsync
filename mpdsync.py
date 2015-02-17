@@ -23,10 +23,10 @@ if mpd.VERSION < (0, 5, 4):
 DEFAULT_PORT = 6600
 FILE_PREFIX_RE = re.compile('^file: ')
 
-class client(mpd.MPDClient):
+class Slave(mpd.MPDClient):
 
     def __init__(self, info=None):
-        super(client, self).__init__()
+        super(Slave, self).__init__()
         self.host = 'localhost'
         self.port = DEFAULT_PORT
         self.password = None
@@ -35,8 +35,6 @@ class client(mpd.MPDClient):
         self.playlist = None
         self.playlistLength = None
         self.playlistVersion = None
-
-        self.slavePlaylistVersion = None  # Updated manually
 
         self.song = None
 
@@ -68,19 +66,18 @@ class client(mpd.MPDClient):
                 log.debug('Reconnected to "%s"' % self.host)
 
     def connect(self):
-        super(client, self).connect(self.host, self.port)
+        super(Slave, self).connect(self.host, self.port)
 
         if self.password:
-            super(client, self).password(self.password)
+            super(Slave, self).password(self.password)
 
     def getPlaylist(self):
-        self.playlist = super(client, self).playlist()
+        self.playlist = super(Slave, self).playlist()
 
     def status(self):
-        self.currentStatus = super(client, self).status()
+        self.currentStatus = super(Slave, self).status()
 
         self.playlistLength = int(self.currentStatus['playlistlength'])
-        self.playlistVersion = self.currentStatus['playlist']
 
         self.song = self.currentStatus['song'] if 'song' in self.currentStatus else None
 
@@ -100,6 +97,16 @@ class client(mpd.MPDClient):
         # 'mixrampdb': '0.000000', 'random': '0', 'state': 'stop',
         # 'volume': '-1', 'single': '0'}
 
+class Master(Slave):
+            
+    def status(self):
+        super(Master, self).status()
+
+        # Use the master's reported playlist version (for the slaves
+        # we update it manually to match the master)
+        self.playlistVersion = self.currentStatus['playlist']        
+
+        
 def main():
     global master, slaves
 
@@ -140,7 +147,7 @@ def main():
         return False
 
     # Connect to the master server
-    master = client()
+    master = Master()
     if ':' in args.master:
         master.host, master.port = args.master.split(':')
     else:
@@ -158,7 +165,7 @@ def main():
     slaves = []
     for slave in args.slaves:
 
-        slaveClient = client()
+        slaveClient = Slave()
         if ':' in slave:
             slaveClient.host, slaveClient.port = slave.split(':')
         else:
@@ -221,7 +228,7 @@ def syncPlaylists():
         # some reason)
         slave.checkConnection()
 
-        if slave.slavePlaylistVersion is None:
+        if slave.playlistVersion is None:
             # Do a full sync the first time
 
             # Start command list
@@ -238,7 +245,7 @@ def syncPlaylists():
             slave.command_list_end()
 
             # Update slave playlist version number
-            slave.slavePlaylistVersion = master.playlistVersion
+            slave.playlistVersion = master.playlistVersion
 
         else:
             # Sync playlist changes
@@ -246,7 +253,7 @@ def syncPlaylists():
             # Start command list
             slave.command_list_ok_begin()
 
-            for change in master.plchanges(slave.slavePlaylistVersion):
+            for change in master.plchanges(slave.playlistVersion):
                 log.debug("Making change: %s" % change)
 
                 # Add new tracks
@@ -270,7 +277,7 @@ def syncPlaylists():
                 log.error("Playlist lengths don't match: %s / %s" % (slave.playlistLength, master.playlistLength))
 
             # Update slave playlist version number
-            slave.slavePlaylistVersion = master.playlistVersion
+            slave.playlistVersion = master.playlistVersion
 
             # Make sure the slave's playing status still matches the
             # master (for some reason, deleting a track lower-numbered
