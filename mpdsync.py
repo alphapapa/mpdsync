@@ -206,7 +206,9 @@ class Master(Client):
                 slave.status()
 
                 # Truncate the slave playlist to the same length as the master
-                if self.playlistLength < slave.playlistLength:
+                if self.playlistlength == 0:
+                    slave.clear()
+                elif self.playlistLength < slave.playlistLength:
                     log.debug("Deleting from %s to %s" % (self.playlistLength - 1, slave.playlistLength - 1))
                     slave.delete((self.playlistLength - 1, slave.playlistLength - 1))
 
