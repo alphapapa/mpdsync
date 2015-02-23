@@ -90,6 +90,7 @@ class Client(mpd.MPDClient):
         self.playlistLength = None
         self.playlistVersion = None
 
+        self.syncLoopLocked = False
         self.hasBeenSynced = False
 
         self.lastSong = None
@@ -623,6 +624,15 @@ class Master(Client):
                 # Check each slave's average difference
                 for slave in self.slaves:
 
+                    # Don't run the loop if an earlier one is already
+                    # waiting for a result (this might be helping to
+                    # cause the MPD protocol errors)
+                    if slave.syncLoopLocked:
+                        log.debug("syncLoopLocked for slave %s", slave.host)
+                        continue
+                    else:
+                        slave.syncLoopLocked = True
+
                     if len(slave.currentSongDifferences) >= 5:
                         # At least 5 measurements for current
                         # song
@@ -689,6 +699,7 @@ class Master(Client):
                             except:
                                 log.error("Couldn't reconnect to slave %s", slave.host)
 
+                    slave.syncLoopLocked = False
 
             # Sleep...
             #time.sleep(2)
