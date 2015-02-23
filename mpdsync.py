@@ -324,57 +324,67 @@ class Master(Client):
 
     def syncPlayer(self, slave):
 
-        # Update master info
-        self.status()
+        tries = 0
+        while tries < 5:
 
-        # Reconnect if connection dropped
-        slave.checkConnection()
+            try:
+                # Update master info
+                self.status()
 
-        # Sync player status
-        if self.playing:
+                # Reconnect if connection dropped
+                slave.checkConnection()
 
-            if slave.playing:
-                log.debug('Playing slave %s, master already playing' % slave.host)
+                # Sync player status
+                if self.playing:
 
-                self.reSeekPlayer(slave)
+                    if slave.playing:
+                        log.debug('Playing slave %s, master already playing' % slave.host)
 
+                        self.reSeekPlayer(slave)
+
+                    else:
+                        log.debug('Playing slave %s, initial=True' % slave.host)
+
+                        try:
+                            slave.seek(self.song, self.elapsed)  # Seek to current master position before playing
+                        except Exception as e:
+                            log.error("Couldn't seek slave %s:", slave.host, e)
+                            return False
+
+                        if not slave.play(initial=True):
+                            log.critical("Couldn't play slave: %s", slave.host)
+                            return False
+
+                        # Wait a moment and then check the difference
+                        time.sleep(0.2)
+                        playLatency = self.compareElapsed(self, slave)
+
+                        if not playLatency:
+                            # This probably means the slave isn't playing at all for some reason
+                            log.error('No playLatency for slave "%s"', slave.host)
+
+                            slave.stop()  # Maybe...?
+
+                            return False
+
+                        log.debug('Client %s took %s seconds to start playing' % (slave.host, playLatency))
+
+                        # Update initial play times
+                        slave.initialPlayTimes.insert(0, playLatency)
+
+                        log.debug('Average initial play time for client %s: %s seconds'
+                                  % (slave.host, slave.initialPlayTimes.average))
+
+                elif self.paused:
+                    slave.pause()
+                else:
+                    slave.stop()
+
+            except Exception as e:
+                log.error("Unable to syncPlayer.  Tries:%s", tries)
+                tries += 1
             else:
-                log.debug('Playing slave %s, initial=True' % slave.host)
-
-                try:
-                    slave.seek(self.song, self.elapsed)  # Seek to current master position before playing
-                except Exception as e:
-                    log.error("Couldn't seek slave %s:", slave.host, e)
-                    return False
-
-                if not slave.play(initial=True):
-                    log.critical("Couldn't play slave: %s", slave.host)
-                    return False
-
-                # Wait a moment and then check the difference
-                time.sleep(0.2)
-                playLatency = self.compareElapsed(self, slave)
-
-                if not playLatency:
-                    # This probably means the slave isn't playing at all for some reason
-                    log.error('No playLatency for slave "%s"', slave.host)
-
-                    slave.stop()  # Maybe...?
-
-                    return False
-
-                log.debug('Client %s took %s seconds to start playing' % (slave.host, playLatency))
-
-                # Update initial play times
-                slave.initialPlayTimes.insert(0, playLatency)
-
-                log.debug('Average initial play time for client %s: %s seconds'
-                          % (slave.host, slave.initialPlayTimes.average))
-
-        elif self.paused:
-            slave.pause()
-        else:
-            slave.stop()
+                return True
 
     def reSeekPlayer(self, slave):
         # Update master info
@@ -609,6 +619,11 @@ class Master(Client):
                         # Use average ping
                         maxDifference = (slave.pings.average * float(10))
 
+                        if maxDifference > 0.1:
+                            # But don't go over 100 ms; if it's that
+                            # high, better to just resync again
+                            maxDifference = 0.1
+
                     else:
                         # This shouldn't happen, but if it does,
                         # use 0.1 until we have something better
@@ -699,6 +714,7 @@ class Master(Client):
 
         except Exception as e:
             log.error("compareElapsed() caught exception: %s", e)
+            slave.checkConnection()  # Maybe this will help
             return False
 
 def timeFunction(f):
