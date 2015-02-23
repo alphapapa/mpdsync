@@ -617,12 +617,22 @@ class Master(Client):
 
                     elif slave.pings.average:
                         # Use average ping
-                        maxDifference = (slave.pings.average * float(10))
 
-                        if maxDifference > 0.1:
+                        # Use the larger of master or slave ping so the script can run on either one
+                        maxDifference = (max([slave.pings.average, masterTester.pings.average]) * float(10))
+
+                        if maxDifference > 0.2:
                             # But don't go over 100 ms; if it's that
                             # high, better to just resync again
-                            maxDifference = 0.1
+
+                            # But this does not work well for remote
+                            # files.  The difference sometimes never
+                            # gets lower than the maxDifference, so it
+                            # resyncs forever, and always by the
+                            # average ping or average slave
+                            # adjustment, which basically loops doing
+                            # the same syncs forever.  Sigh.
+                            maxDifference = 0.2
 
                     else:
                         # This shouldn't happen, but if it does,
