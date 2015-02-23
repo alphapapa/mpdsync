@@ -673,7 +673,15 @@ class Master(Client):
 
 
             # Sleep...
-            time.sleep(2)
+            #time.sleep(2)
+
+            # sleep for 400ms for each measurement
+            sleepTime = 0.4 * len(slave.currentSongDifferences)
+            if sleepTime < 0.5:
+                sleepTime = 0.5
+
+            log.debug('Sleeping for %s seconds', sleepTime)
+            time.sleep(sleepTime)
 
     def compareElapsed(self, master, slave):
         # Wrap entire function in a try/except so it won't make the
