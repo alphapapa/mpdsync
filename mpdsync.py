@@ -537,6 +537,7 @@ class Master(Client):
 
             else:
                 # Sync playlist changes
+                # TODO: if slave.playlistVersion is None, handle it
                 changes = self.plchanges(slave.playlistVersion)
 
                 # Start command list
