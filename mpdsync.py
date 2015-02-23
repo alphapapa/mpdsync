@@ -677,9 +677,13 @@ class Master(Client):
                             maxDifference = 0.2
 
                     else:
-                        # This shouldn't happen, but if it does,
-                        # use 0.1 until we have something better
-                        maxDifference = 0.1
+                        # This shouldn't happen, but if it does, use
+                        # 0.2 until we have something better.  0.2
+                        # seems like a lot, and for local files it is,
+                        # but remote files don't seek as quickly or
+                        # consistently, so 0.1 can cause excessive
+                        # reseeking in a short period of time
+                        maxDifference = 0.2
 
                     log.debug("maxDifference for slave %s: %s", slave.host, pad(round(maxDifference, 3)))
 
