@@ -223,39 +223,46 @@ class Client(mpd.MPDClient):
     def status(self):
         self.currentStatus = super(Client, self).status()
 
-        # Not sure why, but sometimes this ends up as None when the track or playlist is changed...?
-        if self.currentStatus:
-            self.playlistLength = int(self.currentStatus['playlistlength'])
+        # Wrap whole thing in try/except because of MPD protocol errors...sigh
+        try:
 
-            self.song = self.currentStatus['song'] if 'song' in self.currentStatus else None
+            # Not sure why, but sometimes this ends up as None when the track or playlist is changed...?
+            if self.currentStatus:
+                self.playlistLength = int(self.currentStatus['playlistlength'])
 
-            self.consume = True if self.currentStatus['consume'] == '1' else False
-            self.random = True if self.currentStatus['random'] == '1' else False
-            self.repeat = True if self.currentStatus['repeat'] == '1' else False
-            self.single = True if self.currentStatus['single'] == '1' else False
+                self.song = self.currentStatus['song'] if 'song' in self.currentStatus else None
 
-            self.state = self.currentStatus['state']
-            self.playing = True if self.state == 'play' else False
-            self.paused = True if self.state == 'pause' else False
+                self.consume = True if self.currentStatus['consume'] == '1' else False
+                self.random = True if self.currentStatus['random'] == '1' else False
+                self.repeat = True if self.currentStatus['repeat'] == '1' else False
+                self.single = True if self.currentStatus['single'] == '1' else False
 
-            self.duration = round(float(self.currentStatus['duration']), 3) if 'duration' in self.currentStatus else None
-            self.elapsed = round(float(self.currentStatus['elapsed']), 3) if 'elapsed' in self.currentStatus else None
+                self.state = self.currentStatus['state']
+                self.playing = True if self.state == 'play' else False
+                self.paused = True if self.state == 'pause' else False
 
-        else:
-            self.playlistLength = None
+                self.duration = round(float(self.currentStatus['duration']), 3) if 'duration' in self.currentStatus else None
+                self.elapsed = round(float(self.currentStatus['elapsed']), 3) if 'elapsed' in self.currentStatus else None
 
-            self.song = None
+            else:
+                self.playlistLength = None
 
-            self.consume = False
-            self.random = False
-            self.repeat = False
-            self.single = False
+                self.song = None
 
-            self.state = None
-            self.playing = False
-            self.paused = False
+                self.consume = False
+                self.random = False
+                self.repeat = False
+                self.single = False
 
-            self.elapsed = None
+                self.state = None
+                self.playing = False
+                self.paused = False
+
+                self.elapsed = None
+
+        except Exception as e:
+            log.error("Unable to get status for client %s: %s", self.host, e)
+            self.checkConnection()
 
         # TODO: Add other attributes, e.g. {'playlistlength': '55',
         # 'playlist': '3868', 'repeat': '0', 'consume': '0',
