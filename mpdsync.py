@@ -635,6 +635,10 @@ class Master(Client):
                     else:
                         slave.syncLoopLocked = True
 
+                    # Compare the master and slave's elapsed time
+                    self.compareElapsed(masterTester, slave)
+
+                    # Calculate maxDifference
                     if len(slave.currentSongDifferences) >= 5:
                         # At least 5 measurements for current
                         # song
@@ -677,9 +681,6 @@ class Master(Client):
                         maxDifference = 0.1
 
                     log.debug("maxDifference for slave %s: %s", slave.host, pad(round(maxDifference, 3)))
-
-                    # Compare the master and slave's elapsed time
-                    self.compareElapsed(masterTester, slave)
 
                     # Adjust if difference is too big
                     if abs(slave.currentSongDifferences.average) > maxDifference:
