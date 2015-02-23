@@ -405,7 +405,8 @@ class Master(Client):
             log.debug("Adjusting %s by slave.latency: %s", slave.host, slave.latency)
             adjustBy = slave.latency
 
-        elif len(slave.currentSongAdjustments) < 1 or len(slave.currentSongDifferences) < 3:
+        # elif (slave.currentSongAdjustments) < 1 or len(slave.currentSongDifferences) < 1:
+        elif len(slave.currentSongDifferences) < 1:
             # Adjusting a song for the first time or not enough measurements
 
             if len(slave.currentSongAdjustments) < 1:
@@ -415,7 +416,7 @@ class Master(Client):
 
             if len(slave.adjustments) < 5:
                 # Less than 5 adjustments made to slave in total; use averagePing
-                adjustBy = slave.pings.average
+                adjustBy = slave.pings.average * -1
                 log.debug("Less than 5 total adjustments to slave %s; adjusting by average ping: %s", slave.host, adjustBy)
             else:
                 # Adjust by average adjustment Slightly smaller than
@@ -426,7 +427,12 @@ class Master(Client):
 
         else:
             # Not the first adjustment to the song
-            adjustBy = (slave.currentSongDifferences.average * 0.5) * -1
+
+            # Adjust by less than the average difference to gradually
+            # hone in on the right adjustment.  0.5 is ok for local
+            # files, but too small for remote ones; trying 0.75
+            adjustBy = (slave.currentSongDifferences.average * 0.75) * -1
+
             log.debug("Adjusting %s by currentSongDifferences.average: %s", slave.host, adjustBy)
 
             # if abs(adjustBy) < 0.1:
@@ -434,9 +440,10 @@ class Master(Client):
             #     adjustBy = 0
 
         # Sometimes the adjustment goes haywire.  If it's greater than 1% of the song duration, reset
-        if slave.duration and adjustBy > slave.duration * 0.01:
+        if ((slave.duration and adjustBy > slave.duration * 0.01)
+            or adjustBy > 1):
             log.debug('Adjustment to %s too large:%s  Resetting to average ping:%s', slave.host, adjustBy, slave.pings.average)
-            adjustBy = slave.pings.average
+            adjustBy = slave.pings.average *-1
 
         # The amount of time that the slave lags behind the server seems to consistently vary by song or filetype!
         #adjustBy = -0.2  # Just use 0
@@ -472,8 +479,11 @@ class Master(Client):
             slave.checkConnection()
 
         else:
+            # Don't record per-song adjustment if it's just the average ping
+            if adjustBy != slave.pings.average:
+                slave.currentSongAdjustments.insert(0, adjustBy)
+
             slave.adjustments.insert(0, adjustBy)
-            slave.currentSongAdjustments.insert(0, adjustBy)
 
             # Reset song differences (maybe this or just cutting it in
             # half will help prevent too many consecutive adjustments
@@ -544,6 +554,11 @@ class Master(Client):
                         log.error("mpd.ProtocolError: Got unexpected 'OK'")
                         continue  # Maybe it will work next time around...
 
+                if not results:
+                    # This should not happen.  SIGH.
+                    log.error("SIGH.")
+                    continue
+
                 # Add tags for remote tracks with tags in playlist
                 slave.command_list_ok_begin()
                 for num, change in enumerate(changes):
@@ -598,7 +613,6 @@ class Master(Client):
         while True:
             # Wrap entire loop in a try/except so the thread won't
             # die, I hope
-
 
             if self.playing:
 
