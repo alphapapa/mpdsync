@@ -739,7 +739,7 @@ def main():
                         help='Password to connect to servers with')
     parser.add_argument('-l', '--latency-adjust',
                         dest="latencyAdjust", action="store_true",
-                        help="Monitor latency between master and slaves and try to keep slaves' playing position in sync within 0.05 seconds")
+                        help="Monitor latency between master and slaves and try to keep slaves' playing position in sync with the master's")
     parser.add_argument("-v", "--verbose", action="count", dest="verbose", help="Be verbose, up to -vv")
     args = parser.parse_args()
 

@@ -16,18 +16,23 @@ Usage is very simple:
 
 #+BEGIN_SRC
 usage: mpdsync.py [-h] [-m MASTER] [-s [SLAVES [SLAVES ...]]] [-p PASSWORD]
-                  [-v]
+                  [-l] [-v]
 
 Syncs multiple mpd servers.
 
 optional arguments:
   -h, --help            show this help message and exit
   -m MASTER, --master MASTER
-                        Name or address of master server, optionally with port in HOST:PORT format
+                        Name or address of master server, optionally with port
+                        in HOST:PORT format
   -s [SLAVES [SLAVES ...]], --slaves [SLAVES [SLAVES ...]]
-                        Name or address of slave servers, optionally with port in HOST:PORT format
+                        Name or address of slave servers, optionally with port
+                        in HOST:PORT/LATENCY format
   -p PASSWORD, --password PASSWORD
                         Password to connect to servers with
+  -l, --latency-adjust  Monitor latency between master and slaves and try to
+                        keep slaves' playing position in sync with the
+                        master's
   -v, --verbose         Be verbose, up to -vv
 #+END_SRC
 
