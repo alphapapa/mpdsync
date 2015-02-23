@@ -22,6 +22,9 @@ if mpd.VERSION < (0, 5, 4):
 DEFAULT_PORT = 6600
 FILE_PREFIX_RE = re.compile('^file: ')
 
+def pad(number):
+    return "{:.3f}".format(number)
+
 class AveragedList(list):
     def __init__(self, data=None, length=None, name=None, printDebug=True):
 
@@ -30,7 +33,7 @@ class AveragedList(list):
         # TODO: Isn't there a more Pythonic way to do this?
         if data:
             super(AveragedList, self).__init__(data)
-            self.updateAverage()
+            self._updateAverage()
         else:
             super(AveragedList, self).__init__()
             self.average = 0  # None might make more sense, but None doesn't work in abs()
@@ -40,19 +43,24 @@ class AveragedList(list):
 
     def insert(self, *args):
         super(AveragedList, self).insert(*args)
+
         if len(self) > self.length:
             self.pop()
-        self.updateAverage()
+        self._updateAverage()
 
         self.max = max(self)
         self.min = min(self)
         self.range = round(self.max - self.min, 3)
 
         if self.printDebug:
-            log.debug('AveragedList %s:  average:%s  Max:%s  Min:%x  Range:%s  %s',
-                      self.name, round(self.average, 3), self.max, self.min, self.range, self)
+            log.debug('AveragedList %s:  average:%s  Max:%s  Min:%s  Range:%s  %s',
+                      self.name, self._pad(round(self.average, 3)),
+                      self._pad(self.max), self._pad(self.min), self._pad(self.range), self)
 
-    def updateAverage(self):
+    def _pad(self, number):
+        return "{:.3f}".format(number)
+
+    def _updateAverage(self):
         self.average = sum(self) / len(self)
 
 class Client(mpd.MPDClient):
@@ -82,6 +90,8 @@ class Client(mpd.MPDClient):
         self.playlistLength = None
         self.playlistVersion = None
 
+        self.hasBeenSynced = False
+
         self.lastSong = None
         self.song = None
 
@@ -99,12 +109,12 @@ class Client(mpd.MPDClient):
 
         self.pings = AveragedList(name='%s pings' % self.host, length=10, printDebug=False)
 
-        self.elapsedDifferences = AveragedList(name='elapsedDifferences', length=10)  # 5 is not quite enough to smooth it out
+        self.elapsedDifferences = AveragedList(name='elapsedDifferences', length=20)  # 5 is not quite enough to smooth it out
         self.excessiveDifferences = AveragedList(name='excessiveDifferences', length=5)
         self.initialPlayTimes = AveragedList(name='initialPlayTimes', length=5)
 
         self.currentSongAdjustments = []
-        self.currentSongDifferences = AveragedList(name='currentSongDifferences', length=10)
+        self.currentSongDifferences = AveragedList(name='currentSongDifferences', length=20)
         self.adjustments = AveragedList(name='adjustments', length=20)
 
         self.playedSinceLastPlaylistUpdate = False
@@ -123,8 +133,8 @@ class Client(mpd.MPDClient):
             log.debug('Connection to "%s" seems to be down.  Trying to reconnect...' % self.host)
 
             # Try to reconnect
+            self.disconnect()  # Maybe this will help it reconnect next time around...
             try:
-                self.disconnect()  # Maybe this will help it reconnect next time around...
                 self.connect()
             except Exception as e:
                 log.critical('Unable to reconnect to "%s"' % self.host)
@@ -388,21 +398,23 @@ class Master(Client):
 
             if len(slave.adjustments) < 5:
                 # Less than 5 adjustments made to slave in total; use averagePing
-                adjustBy = slave.pings.average * -1
+                adjustBy = slave.pings.average
                 log.debug("Less than 5 total adjustments to slave %s; adjusting by average ping: %s", slave.host, adjustBy)
             else:
-                # Adjust by average adjustment
+                # Adjust by average adjustment Slightly smaller than
+                # the average difference to keep it from ballooning
+                # and swinging back and forth
                 adjustBy = slave.adjustments.average
                 log.debug("Adjusting %s by average adjustment: %s", slave.host, adjustBy)
 
         else:
             # Not the first adjustment to the song
-            adjustBy = slave.currentSongDifferences.average * -1
-            log.debug("Adjusting %s by currentSongDifferences.average: %s", slave.host, slave.currentSongDifferences.average)
+            adjustBy = (slave.currentSongDifferences.average * 0.5) * -1
+            log.debug("Adjusting %s by currentSongDifferences.average: %s", slave.host, adjustBy)
 
-            if abs(adjustBy) < 0.1:
-                log.debug('adjustBy was < 0.1 (%s); setting to 0' % adjustBy)
-                adjustBy = 0
+            # if abs(adjustBy) < 0.1:
+            #     log.debug('adjustBy was < 0.1 (%s); setting to 0' % adjustBy)
+            #     adjustBy = 0
 
         # Sometimes the adjustment goes haywire.  If it's greater than 1% of the song duration, reset
         if slave.duration and adjustBy > slave.duration * 0.01:
@@ -469,7 +481,7 @@ class Master(Client):
                 # or it will raise an exception
                 raise Exception
 
-            if slave.playlistVersion is None:
+            if not slave.hasBeenSynced:
                 # Do a full sync the first time
 
                 # Start command list
@@ -490,6 +502,8 @@ class Master(Client):
                     continue
                 else:
                     log.debug("Added to playlist on slave %s, result:", slave.host, result)
+
+                    slave.hasBeenSynced = True
 
             else:
                 # Sync playlist changes
@@ -567,55 +581,67 @@ class Master(Client):
         while True:
             # Wrap entire loop in a try/except so the thread won't
             # die, I hope
-            try:
 
-                if self.playing:
 
-                    # Check each slave's average difference
-                    for slave in self.slaves:
-                        if len(slave.currentSongDifferences) > 4:
-                            maxDifference = (slave.currentSongDifferences.range / 2) #+ (abs(slave.currentSongDifferences.average)  / 2)
-                        elif slave.pings.average:
-                            # maxDifference = slave.pings.average * 50
-                            maxDifference = (slave.pings.average * float(200))
+            if self.playing:
+
+                # Check each slave's average difference
+                for slave in self.slaves:
+
+                    if len(slave.currentSongDifferences) >= 5:
+                        # At least 5 measurements for current
+                        # song
+
+                        if len(slave.currentSongDifferences) >= 10:
+                            # 10 or more; use one-quarter of the range
+                            maxDifference = (slave.currentSongDifferences.range / 4)
                         else:
-                            maxDifference = 0.1
+                            # 5-9; use one-half of the range
+                            maxDifference = (slave.currentSongDifferences.range / 2)
 
-                        #maxDifference = 0.05  # Just use 0.1
-                        log.debug("maxDifference for slave %s: %s", slave.host, maxDifference)
+                        if maxDifference < slave.currentSongDifferences.max / 2:
+                            # At least half the max to prevent the
+                            # occasional small range from causing
+                            # unnecessary syncs
+                            maxDifference = slave.currentSongDifferences.max / 2
 
-                        self.compareElapsed(masterTester, slave)
+                    elif slave.pings.average:
+                        # Use average ping
+                        maxDifference = (slave.pings.average * float(10))
 
-                        # Adjust if difference is too big
-                        if abs(slave.currentSongDifferences.average) > maxDifference:  # 0.1 seems too big...but less may sync too much...
+                    else:
+                        # This shouldn't happen, but if it does,
+                        # use 0.1 until we have something better
+                        maxDifference = 0.1
 
-                            # Add to list of last 10 excessive differences
-                            # (to help account for that the difference
-                            # after starting a new track tends to be high,
-                            # so if we could do a good adjustment when a
-                            # track is first played, it might not need to
-                            # be resynced)
-                            slave.excessiveDifferences.insert(0, slave.elapsedDifferences.average)
+                    log.debug("maxDifference for slave %s: %s", slave.host, pad(round(maxDifference, 3)))
 
-                            log.info('Resyncing player to minimize difference for slave %s' % slave.host)
+                    # Compare the master and slave's elapsed time
+                    self.compareElapsed(masterTester, slave)
+
+                    # Adjust if difference is too big
+                    if abs(slave.currentSongDifferences.average) > maxDifference:
+                        log.info('Resyncing player to minimize difference for slave %s' % slave.host)
+
+                        try:
+                            # Use the masterTester object because
+                            # the main master object is in idle
+                            masterTester.reSeekPlayer(slave)
+                            slave.reSeekedTimes += 1
+
+                            log.debug("Client %s now reseeked %s times" % (slave.host, slave.reSeekedTimes))
+
+                        except Exception as e:
+                            log.error("Got exception: %s: %s" % (e, e.message))  # Sigh...
+
                             try:
-                                masterTester.reSeekPlayer(slave)  # Use the masterTester object because the main master object is in idle
-                                slave.reSeekedTimes += 1
-                                log.debug("Client %s now reseeked %s times" % (slave.host, slave.reSeekedTimes))
-                            except Exception as e:
-                                log.error("Got exception: %s: %s" % (e, e.message))
+                                slave.checkConnection()
+                            except:
+                                log.error("Couldn't reconnect to slave %s", slave.host)
 
-                                try:
-                                    slave.checkConnection()
-                                except:
-                                    log.error("Couldn't reconnect to slave %s", slave.host)
-
-            except Exception as e:
-                log.error("runElapsedLoop caught exception: %s", e)
-                slave.checkConnection()
 
             # Sleep...
-            time.sleep(4)
+            time.sleep(2)
 
     def compareElapsed(self, master, slave):
         # Wrap entire function in a try/except so it won't make the
@@ -644,7 +670,7 @@ class Master(Client):
                 log.debug("Song changed (%s -> %s); resetting %s.currentSongDifferences", slave.lastSong, slave.song, slave.host)
 
                 slave.currentSongAdjustments = []
-                slave.currentSongDifferences = AveragedList(name='%s currentSongDifferences' % slave.host, length=10)
+                slave.currentSongDifferences = AveragedList(name='%s currentSongDifferences' % slave.host, length=20)
                 slave.lastSong = slave.song
 
             if slave.elapsed:
@@ -673,7 +699,7 @@ class Master(Client):
 
         except Exception as e:
             log.error("compareElapsed() caught exception: %s", e)
-            raise e
+            return False
 
 def timeFunction(f):
     t1 = time.time()
