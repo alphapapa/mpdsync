@@ -645,16 +645,19 @@ class Master(Client):
 
                         if len(slave.currentSongDifferences) >= 10:
                             # 10 or more; use one-quarter of the range
-                            maxDifference = (slave.currentSongDifferences.range / 4)
+                            maxDifference = slave.currentSongDifferences.range / 4
                         else:
                             # 5-9; use one-half of the range
-                            maxDifference = (slave.currentSongDifferences.range / 2)
+                            maxDifference = slave.currentSongDifferences.range / 2
 
-                        if maxDifference < slave.currentSongDifferences.max / 2:
-                            # At least half the max to prevent the
-                            # occasional small range from causing
-                            # unnecessary syncs
-                            maxDifference = slave.currentSongDifferences.max / 2
+                        # Use at least 75% of the biggest difference
+                        # to prevent the occasional small range from
+                        # causing unnecessary syncs
+                        largestDifferenceAllowed = (max([abs(slave.currentSongDifferences.max),
+                                                         abs(slave.currentSongDifferences.min)])
+                                                    * 0.75)
+                        if maxDifference < largestDifferenceAllowed
+                            maxDifference = largestDifferenceAllowed
 
                     elif slave.pings.average:
                         # Use average ping
