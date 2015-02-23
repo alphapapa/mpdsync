@@ -28,6 +28,8 @@ def pad(number):
 class AveragedList(list):
     def __init__(self, data=None, length=None, name=None, printDebug=True):
 
+        # TODO: Add weighted average.  Might be better than using the range.
+
         self.name = name
 
         # TODO: Isn't there a more Pythonic way to do this?
