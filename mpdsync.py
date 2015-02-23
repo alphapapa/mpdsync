@@ -133,7 +133,10 @@ class Client(mpd.MPDClient):
             log.debug('Connection to "%s" seems to be down.  Trying to reconnect...' % self.host)
 
             # Try to reconnect
-            self.disconnect()  # Maybe this will help it reconnect next time around...
+            try:
+                self.disconnect()  # Maybe this will help it reconnect next time around...
+            except Exception as e:
+                log.debug("Couldn't DISconnect from client %s.  SIGH.", self.host)
             try:
                 self.connect()
             except Exception as e:
