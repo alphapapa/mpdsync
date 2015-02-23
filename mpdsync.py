@@ -660,7 +660,8 @@ class Master(Client):
                         # Use average ping
 
                         # Use the larger of master or slave ping so the script can run on either one
-                        maxDifference = (max([slave.pings.average, masterTester.pings.average]) * float(10))
+                        maxDifference = (max([slave.pings.average, masterTester.pings.average])
+                                         * 20)
 
                         if maxDifference > 0.2:
                             # But don't go over 100 ms; if it's that
