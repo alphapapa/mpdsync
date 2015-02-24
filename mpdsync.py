@@ -126,6 +126,8 @@ class Client(mpd.MPDClient):
         self.lastSong = None
         self.song = None
         self.currentSongFiletype = None
+        self.currentSongAdjustments = 0
+        self.currentSongDifferences = AveragedList(name='currentSongDifferences', length=20)
 
         self.consume = False
         self.random = False
@@ -141,12 +143,6 @@ class Client(mpd.MPDClient):
 
         self.pings = AveragedList(name='%s pings' % self.host, length=10, printDebug=False)
 
-        self.elapsedDifferences = AveragedList(name='elapsedDifferences', length=20)  # 5 is not quite enough to smooth it out
-        self.excessiveDifferences = AveragedList(name='excessiveDifferences', length=5)
-        self.initialPlayTimes = AveragedList(name='initialPlayTimes', length=5)
-
-        self.currentSongAdjustments = []
-        self.currentSongDifferences = AveragedList(name='currentSongDifferences', length=20)
         self.adjustments = AveragedList(name='adjustments', length=20)
 
         # Record adjustments by file type to see if there's a pattern
@@ -217,13 +213,6 @@ class Client(mpd.MPDClient):
             else:
                 self.log.debug("Using average ping; average is: %s" % self.initialPlayTimes.average)
                 adjustBy = self.pings.average
-
-            # Don't adjust backwards; latency means this should always
-            # be positive, or at least 0.  This prevents weird bugs
-            # causing attempted seeks behind the master's position,
-            # causing endless seek loops
-            if adjustBy < 0:
-                adjustBy = 0
 
             self.log.debug('Adjusting initial play by %s seconds' % adjustBy)
 
@@ -335,6 +324,7 @@ class Master(Client):
         super(Master, self).__init__(host, password=password)
 
         self.slaves = []
+        self.slaveDifferences = AveragedList(name='slaveDifferences', length=10, printDebug=False)
         self.elapsedLoopRunning = False
         self.latencyAdjust = latencyAdjust
 
@@ -693,6 +683,8 @@ class Master(Client):
             while len(slave.currentSongDifferences) > 5:
                 slave.currentSongDifferences.pop()
 
+            # I think I should have commented this out, doing so for
+            # now: self.compareElapsed(self, slave)
 
     def runElapsedLoop(self):
         if self.elapsedLoopRunning == True:
@@ -848,10 +840,6 @@ class Master(Client):
             ping = abs(masterPing - slavePing)
             self.log.debug("Last ping time: %s" % (ping))
 
-            # Threaded
-            # Thread(target=master.status).start()
-            # Thread(target=slave.status).start()
-            # time.sleep(master.averagePing * 2)
             # Get master status and time how long it takes
             masterStatusLatency = round(timeFunction(master.status), 3)
 
@@ -859,13 +847,14 @@ class Master(Client):
 
             # Get slave status and time how long it takes
             slaveStatusLatency = round(timeFunction(slave.status), 3)
+
             self.log.debug("slaveStatusLatency:%s", slaveStatusLatency)
 
             # If song changed, reset differences
             if slave.lastSong != slave.song:
                 self.log.debug("Song changed (%s -> %s); resetting %s.currentSongDifferences", slave.lastSong, slave.song, slave.host)
 
-                slave.currentSongAdjustments = []
+                slave.currentSongAdjustments = 0
                 slave.currentSongDifferences = AveragedList(name='%s currentSongDifferences' % slave.host, length=20)
                 slave.lastSong = slave.song
 
@@ -887,9 +876,10 @@ class Master(Client):
 
                 slave.currentSongDifferences.insert(0, difference)
 
-                self.log.debug('Master elapsed:%s  %s elapsed:%s  Difference:%s',
-                          master.elapsed, slave.host, slave.elapsed,
-                          difference)
+                # "Difference" is aligned with the average below
+                self.log.debug('Master/%s elapsed:%s/%s  Difference:%s',
+                          slave.host, master.elapsed, slave.elapsed, difference)
+                self.log.debug(slave.currentSongDifferences)
 
                 return difference
 
