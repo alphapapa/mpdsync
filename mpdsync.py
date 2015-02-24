@@ -707,7 +707,10 @@ class Master(Client):
                             masterTester.reSeekPlayer(slave)
                             slave.reSeekedTimes += 1
 
-                            log.debug("Client %s now reseeked %s times" % (slave.host, slave.reSeekedTimes))
+                            # Give it a moment to settle before looping again
+                            time.sleep(1)
+
+                            self.log.debug("Client %s now reseeked %s times" % (slave.host, slave.reSeekedTimes))
 
                         except Exception as e:
                             log.error("Got exception: %s: %s" % (e, e.message))  # Sigh...
