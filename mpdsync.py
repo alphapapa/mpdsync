@@ -722,15 +722,27 @@ class Master(Client):
                         # song
 
                         if len(slave.currentSongDifferences) >= 10:
-                            # 10 or more; use one-quarter of the range
+                            # 10 or more measurements; use one-quarter
+                            # of the range
                             maxDifference = slave.currentSongDifferences.range / 4
+
+                            # Add half the average to prevent it from
+                            # being too small and causing excessive
+                            # reseeks.  For some songs the range can
+                            # be very small, like 38ms, but for others
+                            # it can be consistently 100-200 ms.
+                            maxDifference += (abs(slave.currentSongDifferences.average) / 2)
                         else:
-                            # 5-9; use one-half of the range
+                            # 5-9 measurements; use one-half of the
+                            # range
                             maxDifference = slave.currentSongDifferences.range / 2
 
                         # Use at least half of the biggest difference
                         # to prevent the occasional small range from
-                        # causing unnecessary syncs
+                        # causing unnecessary syncs.  This may not be
+                        # necessary with adding half the average a few
+                        # lines up, but it may be a good extra
+                        # precaution.
                         minimumMaxDifference = (max([abs(slave.currentSongDifferences.max),
                                                      abs(slave.currentSongDifferences.min)])
                                                 * 0.5)
@@ -784,7 +796,8 @@ class Master(Client):
                             self.log.debug("Client %s now reseeked %s times" % (slave.host, slave.reSeekedTimes))
 
                         except Exception as e:
-                            self.log.error("Got exception: %s: %s" % (e, e.message))  # Sigh...
+                            self.log.error("%s: %s", type(e), e)  # Sigh...
+                            raise e
 
                             try:
                                 slave.checkConnection()
@@ -793,15 +806,25 @@ class Master(Client):
 
                     slave.syncLoopLocked = False
 
-            # Sleep...
-            #time.sleep(2)
+                # Sleep for 400ms for each measurement, but at least 500ms
+                sleepTime = 0.4 * len(slave.currentSongDifferences)
+                if sleepTime < 0.5:
+                    sleepTime = 0.5
 
-            # sleep for 400ms for each measurement
-            sleepTime = 0.4 * len(slave.currentSongDifferences)
-            if sleepTime < 0.5:
-                sleepTime = 0.5
+                # Print comparison between two slaves
+                if len(self.slaves) > 1:
+                    self.slaveDifferences.insert(0, abs(self.slaves[0].currentSongDifferences.average \
+                                                        - self.slaves[1].currentSongDifferences.average))
+                    self.log.debug("Average difference between slaves 1 and 2: %s", pad(round(self.slaveDifferences.average, 3)))
 
+            else:
+                # Not playing
+                sleepTime = 2
+
+            # BUG: If there are multiple slaves, this sleeps for
+            # whatever sleepTime was set to for the last slave
             self.log.debug('Sleeping for %s seconds', sleepTime)
+
             time.sleep(sleepTime)
 
     def compareElapsed(self, master, slave):
