@@ -186,7 +186,14 @@ class Client(mpd.MPDClient):
                 log.debug("Using average ping; average is: %s" % self.initialPlayTimes.average)
                 adjustBy = self.pings.average
 
-            log.debug('Adjusting initial play by %s seconds' % adjustBy)
+            # Don't adjust backwards; latency means this should always
+            # be positive, or at least 0.  This prevents weird bugs
+            # causing attempted seeks behind the master's position,
+            # causing endless seek loops
+            if adjustBy < 0:
+                adjustBy = 0
+
+            self.log.debug('Adjusting initial play by %s seconds' % adjustBy)
 
             self.status()
 
