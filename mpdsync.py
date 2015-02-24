@@ -657,14 +657,14 @@ class Master(Client):
                             # 5-9; use one-half of the range
                             maxDifference = slave.currentSongDifferences.range / 2
 
-                        # Use at least 75% of the biggest difference
+                        # Use at least half of the biggest difference
                         # to prevent the occasional small range from
                         # causing unnecessary syncs
-                        largestDifferenceAllowed = (max([abs(slave.currentSongDifferences.max),
-                                                         abs(slave.currentSongDifferences.min)])
-                                                    * 0.75)
-                        if maxDifference < largestDifferenceAllowed
-                            maxDifference = largestDifferenceAllowed
+                        minimumMaxDifference = (max([abs(slave.currentSongDifferences.max),
+                                                     abs(slave.currentSongDifferences.min)])
+                                                * 0.5)
+                        if maxDifference < minimumMaxDifference:
+                            maxDifference = minimumMaxDifference
 
                     elif slave.pings.average:
                         # Use average ping
