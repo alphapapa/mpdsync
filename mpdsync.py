@@ -338,6 +338,128 @@ class Master(Client):
             self.elapsedLoop.daemon = True
             self.elapsedLoop.start()
 
+    def syncPlaylists(self):
+
+        # Get master info
+        self.status()
+        self.getPlaylist()
+
+        # Sync slaves
+        for slave in self.slaves:
+
+            # Reconnect if necessary (slave connections tend to drop for
+            # some reason)
+            if not slave.checkConnection():
+                # If it can't reconnect...we can't sync the playlists,
+                # or it will raise an exception
+                raise Exception
+
+            if not slave.hasBeenSynced:
+                # Do a full sync the first time
+
+                # Compare playlists; don't clear if they're the same
+                slave.getPlaylist()
+                if slave.playlist != self.playlist:
+                    # Playlists differ
+                    self.log.debug("Playlist differs on slave %s; syncing...", slave.host)
+
+                    #Start command list
+                    slave.command_list_ok_begin()
+
+                    # Clear playlist
+                    slave.clear()
+
+                    # Add tracks
+                    for song in self.playlist:
+                        slave.add(FILE_PREFIX_RE.sub('', song))
+
+                    # Execute command list
+                    result = slave.command_list_end()
+
+                    if not result:
+                        self.log.critical("Couldn't add tracks to playlist on slave: %s", slave.host)
+                        continue
+                    else:
+                        self.log.debug("Added to playlist on slave %s, result:", slave.host, result)
+
+                        slave.hasBeenSynced = True
+
+                else:
+                    # Playlists are the same
+                    slave.hasBeenSynced = True
+
+                    self.log.debug("Playlist is the same on slave %s", slave.host)
+
+
+            else:
+                # Sync playlist changes
+                # TODO: if slave.playlistVersion is None, handle it
+                changes = self.plchanges(slave.playlistVersion)
+
+                # Start command list
+                slave.command_list_ok_begin()
+
+                for change in changes:
+                    self.log.debug("Making change: %s" % change)
+
+                    # Add new tracks
+                    self.log.debug('Adding to slave:"%s" file:"%s" at pos:%s' % (slave.host, change['file'], change['pos']))
+                    slave.addid(change['file'], change['pos'])  # Save the song ID from the slave
+
+                # Execute command list
+                try:
+                    results = slave.command_list_end()
+                except mpd.ProtocolError as e:
+                    if e.message == "Got unexpected 'OK'":
+                        self.log.error("mpd.ProtocolError: Got unexpected 'OK'")
+                        continue  # Maybe it will work next time around...
+
+                if not results:
+                    # This should not happen.  SIGH.
+                    self.log.error("SIGH.")
+                    continue
+
+                # Add tags for remote tracks with tags in playlist
+                slave.command_list_ok_begin()
+                for num, change in enumerate(changes):
+                    if 'http' in change['file']:
+                        for tag in ['artist', 'album', 'title', 'genre']:
+                            if tag in change:
+
+                                # results is a list of song IDs that were added; it corresponds to changes
+                                slave.addtagid(int(results[num]), tag, change[tag])
+                try:
+                    slave.command_list_end()
+                except mpd.ProtocolError as e:
+                    if e.message == "Got unexpected 'OK'":
+                        self.log.error("mpd.ProtocolError: Got unexpected 'OK'")
+
+                # Update slave info
+                slave.status()
+
+                # Truncate the slave playlist to the same length as the master
+                if self.playlistLength == 0:
+                    slave.clear()
+                elif self.playlistLength < slave.playlistLength:
+                    self.log.debug("Deleting from %s to %s" % (self.playlistLength - 1, slave.playlistLength - 1))
+                    slave.delete((self.playlistLength - 1, slave.playlistLength - 1))
+
+                # Check result
+                slave.status()
+                if slave.playlistLength != self.playlistLength:
+                    self.log.error("Playlist lengths don't match: %s / %s" % (slave.playlistLength, self.playlistLength))
+
+                # Make sure the slave's playing status still matches the
+                # master (for some reason, deleting a track lower-numbered
+                # than the currently playing track makes the slaves stop
+                # playing)
+                if slave.state != self.state:
+                    self.syncPlayer(slave)
+
+            # Update slave playlist version number to match the master's
+            slave.playlistVersion = self.playlistVersion
+            self.playedSinceLastPlaylistUpdate = False
+
     def syncOptions(self):
         pass
 
@@ -540,115 +662,6 @@ class Master(Client):
             while len(slave.currentSongDifferences) > 5:
                 slave.currentSongDifferences.pop()
 
-
-    def syncPlaylists(self):
-
-        # Get master info
-        self.status()
-        self.getPlaylist()
-
-        # Sync slaves
-        for slave in self.slaves:
-
-            # Reconnect if necessary (slave connections tend to drop for
-            # some reason)
-            if not slave.checkConnection():
-                # If it can't reconnect...we can't sync the playlists,
-                # or it will raise an exception
-                raise Exception
-
-            if not slave.hasBeenSynced:
-                # Do a full sync the first time
-
-                # Start command list
-                slave.command_list_ok_begin()
-
-                # Clear playlist
-                slave.clear()
-
-                # Add tracks
-                for song in self.playlist:
-                    slave.add(FILE_PREFIX_RE.sub('', song))
-
-                # Execute command list
-                result = slave.command_list_end()
-
-                if not result:
-                    self.log.critical("Couldn't add tracks to playlist on slave: %s", slave.host)
-                    continue
-                else:
-                    self.log.debug("Added to playlist on slave %s, result:", slave.host, result)
-
-                    slave.hasBeenSynced = True
-
-            else:
-                # Sync playlist changes
-                # TODO: if slave.playlistVersion is None, handle it
-                changes = self.plchanges(slave.playlistVersion)
-
-                # Start command list
-                slave.command_list_ok_begin()
-
-                for change in changes:
-                    self.log.debug("Making change: %s" % change)
-
-                    # Add new tracks
-                    self.log.debug('Adding to slave:"%s" file:"%s" at pos:%s' % (slave.host, change['file'], change['pos']))
-                    slave.addid(change['file'], change['pos'])  # Save the song ID from the slave
-
-                # Execute command list
-                try:
-                    results = slave.command_list_end()
-                except mpd.ProtocolError as e:
-                    if e.message == "Got unexpected 'OK'":
-                        self.log.error("mpd.ProtocolError: Got unexpected 'OK'")
-                        continue  # Maybe it will work next time around...
-
-                if not results:
-                    # This should not happen.  SIGH.
-                    self.log.error("SIGH.")
-                    continue
-
-                # Add tags for remote tracks with tags in playlist
-                slave.command_list_ok_begin()
-                for num, change in enumerate(changes):
-                    if 'http' in change['file']:
-                        for tag in ['artist', 'album', 'title', 'genre']:
-                            if tag in change:
-
-                                # results is a list of song IDs that were added; it corresponds to changes
-                                slave.addtagid(int(results[num]), tag, change[tag])
-                try:
-                    slave.command_list_end()
-                except mpd.ProtocolError as e:
-                    if e.message == "Got unexpected 'OK'":
-                        self.log.error("mpd.ProtocolError: Got unexpected 'OK'")
-
-                # Update slave info
-                slave.status()
-
-                # Truncate the slave playlist to the same length as the master
-                if self.playlistLength == 0:
-                    slave.clear()
-                elif self.playlistLength < slave.playlistLength:
-                    self.log.debug("Deleting from %s to %s" % (self.playlistLength - 1, slave.playlistLength - 1))
-                    slave.delete((self.playlistLength - 1, slave.playlistLength - 1))
-
-                # Check result
-                slave.status()
-                if slave.playlistLength != self.playlistLength:
-                    self.log.error("Playlist lengths don't match: %s / %s" % (slave.playlistLength, self.playlistLength))
-
-                # Make sure the slave's playing status still matches the
-                # master (for some reason, deleting a track lower-numbered
-                # than the currently playing track makes the slaves stop
-                # playing)
-                if slave.state != self.state:
-                    self.syncPlayer(slave)
-
-            # Update slave playlist version number to match the master's
-            slave.playlistVersion = self.playlistVersion
-            self.playedSinceLastPlaylistUpdate = False
 
     def runElapsedLoop(self):
         if self.elapsedLoopRunning == True:
