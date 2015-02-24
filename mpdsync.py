@@ -509,6 +509,8 @@ class Master(Client):
                     if slave.playing and slave.song == self.song:
                         self.log.debug('Playing slave %s, master already playing same song' % slave.host)
 
+                        # BUG: If -l is not set, then this won't sync the playing position.
+
                     else:
                         # Slave not playing, or playing a different song
                         self.log.debug('Playing slave %s, initial=True' % slave.host)
