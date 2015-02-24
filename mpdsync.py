@@ -27,45 +27,68 @@ def pad(number):
 
 class AveragedList(list):
 
-    def __init__(self, data=None, length=None, name=None, printDebug=True):
+    def __init__(self, data=None, length=None, name=None, printDebug=False):
         self.log = logging.getLogger(self.__class__.__name__)
 
         # TODO: Add weighted average.  Might be better than using the range.
 
         self.name = name
+        self.length = length
+        self.max = 0
+        self.min = 0
+        self.range = 0
+        self.average = 0
+        self.printDebug = printDebug
 
         # TODO: Isn't there a more Pythonic way to do this?
         if data:
             super(AveragedList, self).__init__(data)
-            self._updateAverage()
+            self._updateStats()
         else:
             super(AveragedList, self).__init__()
-            self.average = 0  # None might make more sense, but None doesn't work in abs()
 
-            self.length = length
-            self.printDebug = printDebug
+    def _reprstr(self):
+        return 'name:%s  average:%s  range:%s  max:%s  min:%s' % (
+            self.name,
+            pad(round(self.average, 3)), pad(round(self.range, 3)),
+            pad(round(self.max, 3)), pad(round(self.min, 3)))
+
+    def __repr__(self):
+        return self._reprstr()
+
+    def __str__(self):
+        return self._reprstr()
+
+    def append(self, *args):
+        super(AveragedList, self).append(*args)
+        self._updateStats()
+
+    def clear(self):
+        while len(self) > 0:
+            self.pop()
+
+    def extend(self, *args):
+        super(AveragedList, self).extend(*args)
+        self._updateStats()
 
     def insert(self, *args):
         super(AveragedList, self).insert(*args)
 
         if len(self) > self.length:
             self.pop()
-        self._updateAverage()
+        self._updateStats()
 
+    def _pad(self, number):
+        return "{:.3f}".format(number)
+
+    def _updateStats(self):
+        self.average = sum(self) / len(self)
         self.max = max(self)
         self.min = min(self)
         self.range = round(self.max - self.min, 3)
 
         if self.printDebug:
-            self.log.debug('%s: average:%s  Max:%s  Min:%s  Range:%s  %s',
-                           self.name, self._pad(round(self.average, 3)),
-                           self._pad(self.max), self._pad(self.min), self._pad(self.range), self)
-
-    def _pad(self, number):
-        return "{:.3f}".format(number)
-
-    def _updateAverage(self):
-        self.average = sum(self) / len(self)
+            self.log.debug(self)
 
 class Client(mpd.MPDClient):
 
