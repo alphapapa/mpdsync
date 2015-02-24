@@ -869,23 +869,27 @@ def main():
     # Sync master and slaves
     master.syncAll()
 
-    # Enter sync loop
-    while True:
-        # Wait for something to happen
-        subsystems = master.idle()
+    try:
+        # Enter sync loop
+        while True:
+            # Wait for something to happen
+            subsystems = master.idle()
 
-        # Sync stuff
-        for subsystem in subsystems:
-            if subsystem == 'playlist':
-                log.debug("Subsystem update: playlist")
-                master.syncPlaylists()
-            elif subsystem == 'player':
-                log.debug("Subsystem update: player")
-                master.syncPlayers()
-            elif subsystem == 'options':
-                log.debug("Subsystem update: options")
-                master.syncOptions()
-
+            # Sync stuff
+            for subsystem in subsystems:
+                if subsystem == 'playlist':
+                    log.debug("Subsystem update: playlist")
+                    master.syncPlaylists()
+                elif subsystem == 'player':
+                    log.debug("Subsystem update: player")
+                    master.syncPlayers()
+                elif subsystem == 'options':
+                    log.debug("Subsystem update: options")
+                    master.syncOptions()
+    except KeyboardInterrupt:
+        log.debug("Interrupted.  Filetype adjustments for slave 0: %s",
+                  [{a: master.slaves[0].fileTypeAdjustments[a]}
+                   for a in master.slaves[0].fileTypeAdjustments])
 
 if __name__ == '__main__':
     sys.exit(main())
