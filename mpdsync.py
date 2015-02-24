@@ -843,9 +843,12 @@ class Master(Client):
             # Thread(target=master.status).start()
             # Thread(target=slave.status).start()
             # time.sleep(master.averagePing * 2)
+            # Get master status and time how long it takes
+            masterStatusLatency = round(timeFunction(master.status), 3)
 
-            master.status()
+            self.log.debug("masterStatusLatency:%s", masterStatusLatency)
 
+            # Get slave status and time how long it takes
             slaveStatusLatency = round(timeFunction(slave.status), 3)
             self.log.debug("slaveStatusLatency:%s", slaveStatusLatency)
 
@@ -862,7 +865,7 @@ class Master(Client):
                 # Seems like it makes sense to add the slaveStatusLatency,
                 # but I seem to be observing that the opposite is the
                 # case...
-                difference = round(master.elapsed - slave.elapsed + slaveStatusLatency, 3)
+                difference = round((master.elapsed + masterStatusLatency) - (slave.elapsed + slaveStatusLatency), 3)
 
                 # If difference is too big, discard it, probably I/O
                 # latency on the other end or something
