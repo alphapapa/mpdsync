@@ -5,6 +5,7 @@
 # Rewritten and updated to use python-mpd2 by Adam Porter <adam@alphapapa.net>
 
 import argparse
+from collections import defaultdict
 import logging
 import os
 import re
@@ -124,6 +125,7 @@ class Client(mpd.MPDClient):
 
         self.lastSong = None
         self.song = None
+        self.currentSongFiletype = None
 
         self.consume = False
         self.random = False
@@ -146,6 +148,9 @@ class Client(mpd.MPDClient):
         self.currentSongAdjustments = []
         self.currentSongDifferences = AveragedList(name='currentSongDifferences', length=20)
         self.adjustments = AveragedList(name='adjustments', length=20)
+
+        # Record adjustments by file type to see if there's a pattern
+        self.fileTypeAdjustments = defaultdict(AveragedList)
 
         self.playedSinceLastPlaylistUpdate = False
 
@@ -271,6 +276,10 @@ class Client(mpd.MPDClient):
                 self.playlistLength = int(self.currentStatus['playlistlength'])
 
                 self.song = self.currentStatus['song'] if 'song' in self.currentStatus else None
+
+                if self.playlist:
+                    self.currentSongFiletype = self.playlist[int(self.song)].split('.')[-1]
+                    self.log.debug('Current filetype: %s', self.currentSongFiletype)
 
                 self.consume = True if self.currentStatus['consume'] == '1' else False
                 self.random = True if self.currentStatus['random'] == '1' else False
