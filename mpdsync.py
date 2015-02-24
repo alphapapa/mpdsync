@@ -167,7 +167,7 @@ class Client(mpd.MPDClient):
             try:
                 self.disconnect()  # Maybe this will help it reconnect next time around...
             except Exception as e:
-                self.log.debug("Couldn't DISconnect from client %s.  SIGH.", self.host)
+                self.log.debug("Couldn't DISconnect from client %s.  SIGH: %s", self.host, e)
             try:
                 self.connect()
             except Exception as e:
@@ -402,7 +402,7 @@ class Master(Client):
                         self.log.critical("Couldn't add tracks to playlist on slave: %s", slave.host)
                         continue
                     else:
-                        self.log.debug("Added to playlist on slave %s, result:", slave.host, result)
+                        self.log.debug("Added to playlist on slave %s, result: %s", slave.host, result)
 
                         slave.hasBeenSynced = True
 
@@ -604,7 +604,7 @@ class Master(Client):
                         # Too many adjustments for this song.  Try average
                         # ping to settle back down.  Some songs just don't
                         # seek reliably or something.
-                        self.log.debug("Too many adjustments for song on slave %s; using adjusting by average ping", slave.host)
+                        self.log.debug("Too many adjustments for song on slave %s; adjusting by average ping", slave.host)
 
                         adjustBy = slave.pings.average
 
