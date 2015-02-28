@@ -264,17 +264,19 @@ class Client(mpd.MPDClient):
             super(Client, self).play()
 
             # Execute command list
-            self.command_list_end()
+            result = self.command_list_end()
 
         else:
             # Slave is already playing current song
             self.log.debug("%s.play(initial=False)", self.host)
 
             # Issue the play command
-            super(Client, self).play()
+            result = super(Client, self).play()
 
         # TODO: Not sure if this is still necessary to track...
         self.playedSinceLastPlaylistUpdate = True
+
+        return result
 
     def seek(self, song, elapsed):
         '''Wrapper to update song and elapsed when seek() is called.'''
