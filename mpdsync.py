@@ -927,11 +927,11 @@ class Master(Client):
 
             # Don't reseek if the current difference is
             # both less than the average difference and
-            # within 10% of it; hopefully this will help
+            # within 50% of it; hopefully this will help
             # avoid excessive reseeking
             absCurrentDifference = abs(slave.currentSongDifferences[0])
             if (absCurrentDifference < absAverage
-                and (absCurrentDifference / absAverage) < 0.1):
+                and (absCurrentDifference / absAverage) < 0.5):
 
                 self.log.debug('Current difference (%s) < average difference (%s); not reseeking',
                                absCurrentDifference, absAverage)
