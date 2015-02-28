@@ -871,9 +871,14 @@ class Master(Client):
                                        slave.currentSongDifferences.average, maxDifference)
 
                         # Don't reseek if the current difference is
-                        # less than the average; hopefully this will
-                        # help avoid excessive reseeking
-                        if abs(slave.currentSongDifferences[0]) < abs(slave.currentSongDifferences.average):
+                        # both less than the average difference and
+                        # within 10% of it; hopefully this will help
+                        # avoid excessive reseeking
+                        lastDifference = abs(slave.currentSongDifferences[0])
+                        average = abs(slave.currentSongDifferences.average)
+                        if (lastDifference < average 
+                            and (lastDifference / average) < 0.1):
+                        
                             self.log.debug('Current difference (%s) < average difference (%s); not reseeking',
                                            abs(slave.currentSongDifferences[0]), abs(slave.currentSongDifferences.average))
 
