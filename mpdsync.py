@@ -681,8 +681,15 @@ class Master(Client):
 
                         self.log.debug("Adjusting %s by currentSongDifferences.average: %s", slave.host, adjustBy)
 
-            # Sometimes the adjustment goes haywire.  If it's greater than 1% of the song duration, reset
-            if ((slave.duration and adjustBy > slave.duration * 0.01)
+            # TODO: If the difference is too great, it seems that the
+            # slave MPD has hit a bug where it thinks that song
+            # duration is shorter than it is and won't seek past that
+            # point.  Stopping the slave playback and re-playing the
+            # track seems to fix it.
+
+            # Sometimes the adjustment goes haywire.  If it's greater
+            # than 1% of the song duration, reset
+            if ((slave.duration and abs(adjustBy) > slave.duration * 0.01)
                 or adjustBy > 1):
                 self.log.debug('Adjustment to %s too large:%s  Adjusting by average ping:%s',
                                slave.host, adjustBy, slave.pings.average)
