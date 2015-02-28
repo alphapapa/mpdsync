@@ -844,27 +844,39 @@ class Master(Client):
 
                     # Adjust if difference is too big
                     if abs(slave.currentSongDifferences.average) > maxDifference:
-                        self.log.info('Resyncing player to minimize difference for slave %s' % slave.host)
+                        self.log.debug('Average song difference (%s) > maxDifference (%s)',
+                                       slave.currentSongDifferences.average, maxDifference)
 
-                        try:
-                            # Use the masterTester object because
-                            # the main master object is in idle
-                            masterTester.reSeekPlayer(slave)
-                            slave.reSeekedTimes += 1
+                        # Don't reseek if the current difference is
+                        # less than the average; hopefully this will
+                        # help avoid excessive reseeking
+                        if abs(slave.currentSongDifferences[0]) < abs(slave.currentSongDifferences.average):
+                            self.log.debug('Current difference (%s) < average difference (%s); not reseeking',
+                                           abs(slave.currentSongDifferences[0]), abs(slave.currentSongDifferences.average))
 
-                            # Give it a moment to settle before looping again
-                            time.sleep(1)
-
-                            self.log.debug("Client %s now reseeked %s times" % (slave.host, slave.reSeekedTimes))
-
-                        except Exception as e:
-                            self.log.error("%s: %s", type(e), e)  # Sigh...
-                            raise e
+                        else:
+                            # Do the reseek
+                            self.log.info('Resyncing player to minimize difference for slave %s' % slave.host)
 
                             try:
-                                slave.checkConnection()
-                            except:
-                                self.log.error("Couldn't reconnect to slave %s", slave.host)
+                                # Use the masterTester object because
+                                # the main master object is in idle
+                                masterTester.reSeekPlayer(slave)
+                                slave.reSeekedTimes += 1
+
+                                # Give it a moment to settle before looping again
+                                time.sleep(1)
+
+                                self.log.debug("Client %s now reseeked %s times" % (slave.host, slave.reSeekedTimes))
+
+                            except Exception as e:
+                                self.log.error("%s: %s", type(e), e)  # Sigh...
+                                raise e
+
+                                try:
+                                    slave.checkConnection()
+                                except:
+                                    self.log.error("Couldn't reconnect to slave %s", slave.host)
 
                     slave.syncLoopLocked = False
 
