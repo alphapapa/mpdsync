@@ -156,6 +156,11 @@ class Client(mpd.MPDClient):
         # Record adjustments by file type to see if there's a pattern
         self.fileTypeAdjustments = defaultdict(AveragedList)
 
+        # TODO: Record each song's number of adjustments in a list (by
+        # filename), and print on exit.  This way I can play a short
+        # playlist in a loop and see if there is a pattern with
+        # certain songs being consistently bad at syncing and seeking.
+
         self.playedSinceLastPlaylistUpdate = False
 
         self.reSeekedTimes = 0
