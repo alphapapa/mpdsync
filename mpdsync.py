@@ -638,7 +638,8 @@ class Master(Client):
                         # Too many adjustments for this song.  Try average
                         # ping to settle back down.  Some songs just don't
                         # seek reliably or something.
-                        self.log.debug("Too many adjustments for song on slave %s; adjusting by average ping", slave.host)
+                        self.log.debug("Too many adjustments (%s) for song on slave %s; adjusting by average ping",
+                                       slave.currentSongAdjustments, slave.host)
 
                         adjustBy = slave.pings.average
 
