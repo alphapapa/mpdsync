@@ -581,7 +581,7 @@ class Master(Client):
                     slave.stop()
 
             except Exception as e:
-                self.log.error("Unable to syncPlayer.  Tries:%s", tries)
+                self.log.error("Unable to syncPlayer for slave %s.  Tries:%s  Error:%s", slave.host, tries, e)
                 tries += 1
             else:
                 return True
