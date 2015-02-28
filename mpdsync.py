@@ -791,10 +791,6 @@ class Master(Client):
                 # Check each slave's average difference
                 for slave in self.slaves:
 
-                    # Don't seek if we're finished seeking this song
-                    if not slave.currentSongShouldSeek:
-                        continue
-
                     # Don't run the loop if an earlier one is already
                     # waiting for a result (this might be helping to
                     # cause the MPD protocol errors)
@@ -841,14 +837,8 @@ class Master(Client):
         # Compare the master and slave's elapsed time
         self._compareElapsed(self.masterTester, slave)
 
-        # If the average difference is less than 30ms, and
-        # there are enough measurements, stop seeking
-        # until the next song
-        if (len(slave.currentSongDifferences) >= 10
-            and abs(slave.currentSongDifferences.average) < 0.030):
-            self.log.debug('Average difference below 30ms; not seeking this song anymore')
-
-            slave.currentSongShouldSeek = False
+        # Don't seek if we're finished seeking this song
+        if not slave.currentSongShouldSeek:
             return
 
         # Calculate maxDifference
@@ -916,6 +906,16 @@ class Master(Client):
         maxDifference = myFloat(maxDifference)
 
         self.log.debug("maxDifference for slave %s: %s", slave.host, maxDifference)
+
+        # If the average difference is less than 30ms, and there are
+        # enough measurements, stop seeking until the next song.  Do
+        # this down here so we can still watch measurements.
+        if (len(slave.currentSongDifferences) >= 10
+            and abs(slave.currentSongDifferences.average) < 0.030):
+            self.log.debug('Average difference below 30ms; not seeking this song anymore')
+
+            slave.currentSongShouldSeek = False
+            return
 
         # Adjust if difference is too big
         absAverage = abs(slave.currentSongDifferences.average)
