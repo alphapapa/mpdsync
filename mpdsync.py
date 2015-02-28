@@ -878,6 +878,17 @@ class Master(Client):
         # script fail if python-mpd gets out of sync with command
         # results
 
+        # TODO: Some songs MPD seems unable to sync properly.  If the
+        # seek value is higher than a certain position, it will always
+        # seek to around the same value, meaning it basically can't
+        # seek past a certain point in the song.  This leads to
+        # endless syncs, and it means the slave seeks to the same
+        # place over and over again until the master moves on to the
+        # next song.  This causes the slave to sound like a broken
+        # record.  Perhaps charming in a nostalgic kind of way, but
+        # not exactly desirable...  So I guess I need to try to detect
+        # this somehow.  Sigh.
+        
         try:
             masterPing = round(timeFunction(master.ping), 3)
             slavePing = round(timeFunction(slave.ping), 3)
