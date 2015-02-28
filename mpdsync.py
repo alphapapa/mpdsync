@@ -839,6 +839,8 @@ class Master(Client):
 
         # Don't seek if we're finished seeking this song
         if not slave.currentSongShouldSeek:
+            self.log.debug('Not seeking this song anymore')
+
             return
 
         # Calculate maxDifference
