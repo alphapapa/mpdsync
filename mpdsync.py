@@ -23,8 +23,15 @@ if mpd.VERSION < (0, 5, 4):
 DEFAULT_PORT = 6600
 FILE_PREFIX_RE = re.compile('^file: ')
 
-def pad(number):
-    return "{:.3f}".format(number)
+class myFloat(float):
+    '''Rounds and pads to 3 decimal places when printing.'''
+    
+    def __init__(self, num, roundBy=3):
+        super(myFloat, self).__init__(num)
+        self.roundBy = roundBy
+
+    def __str__(self):
+        return "{:.3f}".format(round(self, self.roundBy))
 
 class AveragedList(list):
 
@@ -48,20 +55,15 @@ class AveragedList(list):
         else:
             super(AveragedList, self).__init__()
 
-    def _reprstr(self):
-        return 'name:%s  average:%s  range:%s  max:%s  min:%s' % (
-            self.name,
-            pad(round(self.average, 3)), pad(round(self.range, 3)),
-            pad(round(self.max, 3)), pad(round(self.min, 3)))
-
-    def __repr__(self):
-        return self._reprstr()
-
     def __str__(self):
-        return self._reprstr()
+        return 'name:%s average:%s range:%s max:%s min:%s' %(
+            self.name, self.average, self.range, self.max, self.min)
 
-    def append(self, *args):
-        super(AveragedList, self).append(*args)
+    __repr__ = __str__
+
+    def append(self, arg):
+        arg = myFloat(arg)
+        super(AveragedList, self).append(arg)
         self._updateStats()
 
     def clear(self):
@@ -69,24 +71,23 @@ class AveragedList(list):
             self.pop()
 
     def extend(self, *args):
+        args = [[myFloat(a) for l in args for a in l]]
         super(AveragedList, self).extend(*args)
         self._updateStats()
 
-    def insert(self, *args):
-        super(AveragedList, self).insert(*args)
+    def insert(self, pos, *args):
+        args = [myFloat(a) for a in args]
+        super(AveragedList, self).insert(pos, *args)
 
         if len(self) > self.length:
             self.pop()
         self._updateStats()
 
-    def _pad(self, number):
-        return "{:.3f}".format(number)
-
     def _updateStats(self):
-        self.average = sum(self) / len(self)
-        self.max = max(self)
-        self.min = min(self)
-        self.range = round(self.max - self.min, 3)
+        self.average = myFloat(sum(self) / len(self))
+        self.max = myFloat(max(self))
+        self.min = myFloat(min(self))
+        self.range = myFloat(self.max - self.min)
 
         if self.printDebug:
             self.log.debug(self)
@@ -222,6 +223,8 @@ class Client(mpd.MPDClient):
 
                 adjustBy = self.pings.average
 
+            adjustBy = myFloat(adjustBy)
+
             self.log.debug('Adjusting initial play by %s seconds', adjustBy)
 
             # Update status (not sure if this is still necessary, but
@@ -244,7 +247,7 @@ class Client(mpd.MPDClient):
             # positive adjustment?  There seem to be some tracks that
             # require negative adjustments, but I don't know if that
             # would be the case when playing from a stop
-            if round(adjustBy, 3) > 0:
+            if adjustBy > 0:
                 tries = 0
 
                 # Wait for the server to...catch up?  I don't remember
@@ -258,7 +261,7 @@ class Client(mpd.MPDClient):
                     tries += 1
 
                 # Seek to the adjusted playing position
-                self.seek(self.song, self.elapsed + round(adjustBy, 3))
+                self.seek(self.song, self.elapsed + adjustBy)
 
             # Issue the play command
             super(Client, self).play()
@@ -311,8 +314,8 @@ class Client(mpd.MPDClient):
                 self.playing = True if self.state == 'play' else False
                 self.paused = True if self.state == 'pause' else False
 
-                self.duration = round(float(self.currentStatus['duration']), 3) if 'duration' in self.currentStatus else None
-                self.elapsed = round(float(self.currentStatus['elapsed']), 3) if 'elapsed' in self.currentStatus else None
+                self.duration = myFloat(self.currentStatus['duration']) if 'duration' in self.currentStatus else None
+                self.elapsed = myFloat(self.currentStatus['elapsed']) if 'elapsed' in self.currentStatus else None
 
             else:
                 self.playlistLength = None
@@ -674,10 +677,21 @@ class Master(Client):
                     else:
                         # <10 adjustments for song
 
-                        # Adjust by less than the average difference to gradually
-                        # hone in on the right adjustment.  0.5 is ok for local
-                        # files, but too small for remote ones; trying 0.75
-                        adjustBy = (slave.currentSongDifferences.average * 0.75) * -1
+                        # Adjust by less than the average difference
+                        # to gradually hone in on the right
+                        # adjustment.  0.5 is ok for local files, but
+                        # too small for remote ones; trying 0.75.  I
+                        # think the result should NOT be inverted, but
+                        # I had it being inverted before...and it
+                        # seemed to work... or did it?  I'm beginning
+                        # to wonder if seek-latency is so wild that
+                        # the best way to sync is to just sync with no
+                        # adjustment or ping-only adjustment and redo
+                        # it a few times until you get lucky and the
+                        # difference is small.  Invert the adjustment
+                        # (otherwise it would adjust in the wrong
+                        # direction).
+                        adjustBy = myFloat(slave.currentSongDifferences.average * 0.75 * -1)
 
                         self.log.debug("Adjusting %s by currentSongDifferences.average: %s", slave.host, adjustBy)
 
@@ -700,7 +714,7 @@ class Master(Client):
             #  Commenting out for now: self.status()
 
             # Calculate position
-            position = round(self.elapsed - adjustBy, 3)
+            position = myFloat(self.elapsed - adjustBy)
             if position < 0:
                 self.log.debug("Position for %s was < 0 (%s); skipping adjustment", slave.host, position)
                 return
@@ -714,7 +728,7 @@ class Master(Client):
         # a try/except should help it try again
         try:
             # Try to seek to current playing position, adjusted for latency
-            slave.seek(self.song, position)
+            slave.seek(self.song, round(position, 3))
 
         except Exception as e:
             # Seek failed
@@ -735,7 +749,7 @@ class Master(Client):
             # Don't record adjustment if it's just the average ping
             if adjustBy != slave.pings.average:
                 slave.adjustments.insert(0, adjustBy)
-                slave.fileTypeAdjustments[slave.currentSongFiletype].append(round(adjustBy, 3))
+                slave.fileTypeAdjustments[slave.currentSongFiletype].append(adjustBy)
                 self.log.debug("Adjustments for filetype %s: %s",
                                slave.currentSongFiletype, slave.fileTypeAdjustments[slave.currentSongFiletype])
 
@@ -840,7 +854,9 @@ class Master(Client):
                         # reseeking in a short period of time
                         maxDifference = 0.2
 
-                    self.log.debug("maxDifference for slave %s: %s", slave.host, pad(round(maxDifference, 3)))
+                    maxDifference = myFloat(maxDifference)
+
+                    self.log.debug("maxDifference for slave %s: %s", slave.host, maxDifference)
 
                     # Adjust if difference is too big
                     if abs(slave.currentSongDifferences.average) > maxDifference:
@@ -889,7 +905,7 @@ class Master(Client):
                 if len(self.slaves) > 1:
                     self.slaveDifferences.insert(0, abs(self.slaves[0].currentSongDifferences.average \
                                                         - self.slaves[1].currentSongDifferences.average))
-                    self.log.debug("Average difference between slaves 1 and 2: %s", pad(round(self.slaveDifferences.average, 3)))
+                    self.log.debug("Average difference between slaves 1 and 2: %s", self.slaveDifferences.average)
 
             else:
                 # Not playing
@@ -916,21 +932,21 @@ class Master(Client):
         # record.  Perhaps charming in a nostalgic kind of way, but
         # not exactly desirable...  So I guess I need to try to detect
         # this somehow.  Sigh.
-        
-        try:
-            masterPing = round(timeFunction(master.ping), 3)
-            slavePing = round(timeFunction(slave.ping), 3)
 
-            ping = abs(masterPing - slavePing)
+        try:
+            masterPing = myFloat(timeFunction(master.ping))
+            slavePing = myFloat(timeFunction(slave.ping))
+
+            ping = myFloat(abs(masterPing - slavePing))
             self.log.debug("Last ping time: %s" % (ping))
 
             # Get master status and time how long it takes
-            masterStatusLatency = round(timeFunction(master.status), 3)
+            masterStatusLatency = myFloat(timeFunction(master.status))
 
             self.log.debug("masterStatusLatency:%s", masterStatusLatency)
 
             # Get slave status and time how long it takes
-            slaveStatusLatency = round(timeFunction(slave.status), 3)
+            slaveStatusLatency = myFloat(timeFunction(slave.status))
 
             self.log.debug("slaveStatusLatency:%s", slaveStatusLatency)
 
@@ -947,7 +963,7 @@ class Master(Client):
                 # Seems like it makes sense to add the slaveStatusLatency,
                 # but I seem to be observing that the opposite is the
                 # case...
-                difference = round((master.elapsed + masterStatusLatency) - (slave.elapsed + slaveStatusLatency), 3)
+                difference = myFloat(master.elapsed - (slave.elapsed + slaveStatusLatency))
 
                 # If difference is too big, discard it, probably I/O
                 # latency on the other end or something
