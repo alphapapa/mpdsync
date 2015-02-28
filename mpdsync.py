@@ -144,6 +144,7 @@ class Client(mpd.MPDClient):
         self.pings = AveragedList(name='%s pings' % self.host, length=10, printDebug=False)
 
         self.adjustments = AveragedList(name='adjustments', length=20)
+        self.initialPlayTimes = AveragedList(name='%s.initialPlayTimes' % self.host, length=20)
 
         # Record adjustments by file type to see if there's a pattern
         self.fileTypeAdjustments = defaultdict(AveragedList)
