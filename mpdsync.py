@@ -134,7 +134,7 @@ class Client(mpd.MPDClient):
         self.song = None
         self.currentSongFiletype = None
         self.currentSongAdjustments = 0
-        self.currentSongDifferences = AveragedList(name='currentSongDifferences', length=20)
+        self.currentSongDifferences = AveragedList(name='currentSongDifferences', length=10)
 
         self.consume = False
         self.random = False
@@ -695,9 +695,8 @@ class Master(Client):
                         # the best way to sync is to just sync with no
                         # adjustment or ping-only adjustment and redo
                         # it a few times until you get lucky and the
-                        # difference is small.  Invert the adjustment
-                        # (otherwise it would adjust in the wrong
-                        # direction).
+                        # difference is small.  Invert the difference
+                        # to adjust the opposite of the difference.
                         adjustBy = myFloat(slave.currentSongDifferences.average * 0.75 * -1)
 
                         self.log.debug("Adjusting %s by currentSongDifferences.average: %s", slave.host, adjustBy)
@@ -876,9 +875,9 @@ class Master(Client):
                         # avoid excessive reseeking
                         lastDifference = abs(slave.currentSongDifferences[0])
                         average = abs(slave.currentSongDifferences.average)
-                        if (lastDifference < average 
+                        if (lastDifference < average
                             and (lastDifference / average) < 0.1):
-                        
+
                             self.log.debug('Current difference (%s) < average difference (%s); not reseeking',
                                            abs(slave.currentSongDifferences[0]), abs(slave.currentSongDifferences.average))
 
@@ -967,7 +966,7 @@ class Master(Client):
                 self.log.debug("Song changed (%s -> %s); resetting %s.currentSongDifferences", slave.lastSong, slave.song, slave.host)
 
                 slave.currentSongAdjustments = 0
-                slave.currentSongDifferences = AveragedList(name='%s currentSongDifferences' % slave.host, length=20)
+                slave.currentSongDifferences = AveragedList(name='%s currentSongDifferences' % slave.host, length=10)
                 slave.lastSong = slave.song
 
             if slave.elapsed:
