@@ -199,52 +199,81 @@ class Client(mpd.MPDClient):
         self.paused = True
 
     def play(self, initial=False):
-        if initial:  # or self.playedSinceLastPlaylistUpdate == False:
-            if initial:
-                self.log.debug('INITIAL PLAY: initial=True')
-            else:
-                self.log.debug('INITIAL PLAY: self.playedSinceLastPlaylistUpdate == False')
+        '''Issue mpd play command, adjusting starting position as necessary.'''
 
-            # Adjust for average play latency
+        # FIXME: I was checking if (self.playedSinceLastPlaylistUpdate
+        # == False), but I removed that code.  I'm not sure if it's
+        # still necessary.
+
+        if initial:
+            # Slave is not already playing, or is playing a different song
+            self.log.debug("%s.play(initial=True)", self.host)
+
+            # Calculate adjustment
             if self.latency:
+                # Use user-set adjustment
                 adjustBy = self.latency
             elif self.initialPlayTimes.average:
-                self.log.debug("Using play time average")
+                self.log.debug("Adjusting by average initial play time")
+
                 adjustBy = self.initialPlayTimes.average
             else:
-                self.log.debug("Using average ping; average is: %s" % self.initialPlayTimes.average)
+                self.log.debug("Adjusting by average ping")
+
                 adjustBy = self.pings.average
 
-            self.log.debug('Adjusting initial play by %s seconds' % adjustBy)
+            self.log.debug('Adjusting initial play by %s seconds', adjustBy)
 
+            # Update status (not sure if this is still necessary, but
+            # it might help avoid race conditions or something)
             self.status()
 
             # Execute in command list
+            # TODO: Is a command list necessary or helpful here?
             try:
                 self.command_list_ok_begin()
             except mpd.CommandListError as e:
                 # Server was already in a command list; probably a lost client connection, so try again
-                self.log.debug("mpd.CommandListError: %s" % e.message)
+                self.log.debug("mpd.CommandListError: %s", e)
+
                 self.command_list_end()
                 self.command_list_ok_begin()
 
-            if round(adjustBy, 3) > 0:  # Only if difference is > 1 ms
+            # Adjust starting position if necessary
+            # TODO: Is it necessary or good to make sure it's a
+            # positive adjustment?  There seem to be some tracks that
+            # require negative adjustments, but I don't know if that
+            # would be the case when playing from a stop
+            if round(adjustBy, 3) > 0:
                 tries = 0
 
-                # Wait for the server to...catch up?
-                while self.elapsed is None and tries < 10:  # 2 seconds worth
+                # Wait for the server to...catch up?  I don't remember
+                # exactly why this code is here, because it seems like
+                # the master shouldn't be behind the slaves, but I
+                # suppose it could happen on song changes
+                while self.elapsed is None and tries < 10:
                     time.sleep(0.2)
                     self.status()
                     self.log.debug(self.song)
                     tries += 1
 
+                # Seek to the adjusted playing position
                 self.seek(self.song, self.elapsed + round(adjustBy, 3))
+
+            # Issue the play command
             super(Client, self).play()
+
+            # Execute command list
             self.command_list_end()
 
         else:
+            # Slave is already playing current song
+            self.log.debug("%s.play(initial=False)", self.host)
+
+            # Issue the play command
             super(Client, self).play()
 
+        # TODO: Not sure if this is still necessary to track...
         self.playedSinceLastPlaylistUpdate = True
 
     def seek(self, song, elapsed):
