@@ -634,6 +634,16 @@ class Master(Client):
                     # Enough measurements for song
                     self.log.debug("%s measurements for song on slave %s", len(slave.currentSongDifferences), slave.host)
 
+                    # TODO: Record timestamp of each adjustment.  If
+                    # it's been a long time since the last adjustment,
+                    # it may be a case of the range suddenly dropping
+                    # when a measurement fell off the list, causing
+                    # the maxDifference to suddenly drop, causing
+                    # another sync.  But sometimes this causes an
+                    # unnecessary sync, and this leads to a cascade of
+                    # resyncs based on ping...which may mess up a
+                    # well-synced song.  :(
+
                     if slave.currentSongAdjustments > 10:
                         # Too many adjustments for this song.  Try average
                         # ping to settle back down.  Some songs just don't
