@@ -841,7 +841,7 @@ class Master(Client):
         # If the average difference is less than 30ms, and
         # there are enough measurements, stop seeking
         # until the next song
-        if (len(slave.currentSongDifferences) > 10
+        if (len(slave.currentSongDifferences) >= 10
             and abs(slave.currentSongDifferences.average) < 0.030):
             self.log.debug('Average difference below 30ms; not seeking this song anymore')
 
