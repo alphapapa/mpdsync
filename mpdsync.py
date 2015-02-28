@@ -589,6 +589,15 @@ class Master(Client):
                 return True
 
     def reSeekPlayer(self, slave):
+
+        # TODO: Idea: Maybe part of the problem is that MPD can't seek
+        # songs precisely, but only to certain places, like between
+        # frames, or something like that.  So maybe if the master and
+        # slaves were both seeked to the same value initially, it
+        # would cause them to both seek to about the same place, once
+        # or twice, instead of the slaves trying repeatedly to get a
+        # good sync.
+
         # Update master info
         self.status()
 
