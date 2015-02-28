@@ -806,6 +806,9 @@ class Master(Client):
                         # Lock the slave
                         slave.syncLoopLocked = True
 
+                    # TODO: If finished seeking, stop the loop until
+                    # the next track (and restart it on track change)
+
                     self._seekIfNecessary(slave)
 
                     # Unlock the slave
