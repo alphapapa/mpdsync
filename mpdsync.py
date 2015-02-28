@@ -25,10 +25,16 @@ FILE_PREFIX_RE = re.compile('^file: ')
 
 class myFloat(float):
     '''Rounds and pads to 3 decimal places when printing.'''
-    
+
     def __init__(self, num, roundBy=3):
         super(myFloat, self).__init__(num)
         self.roundBy = roundBy
+
+    def __abs__(self):
+        '''Override this so it will return another myFloat, which will print
+        rounded and padded.'''
+
+        return myFloat(float.__abs__(self))
 
     def __str__(self):
         return "{:.3f}".format(round(self, self.roundBy))
@@ -142,7 +148,7 @@ class Client(mpd.MPDClient):
         self.duration = None
         self.elapsed = None
 
-        self.pings = AveragedList(name='%s pings' % self.host, length=10, printDebug=False)
+        self.pings = AveragedList(name='%s pings' % self.host, length=10)
 
         self.adjustments = AveragedList(name='adjustments', length=20)
         self.initialPlayTimes = AveragedList(name='%s.initialPlayTimes' % self.host, length=20)
@@ -158,12 +164,13 @@ class Client(mpd.MPDClient):
         self.pings.insert(0, timeFunction(super(Client, self).ping))
 
     def checkConnection(self):
+        '''Pings the client and tries to reconnect if necessary.'''
 
         # I don't know why this is necessary, but for some reason the slave connections tend to get dropped.
         try:
             self.ping()
         except Exception as e:
-            self.log.debug('Connection to "%s" seems to be down.  Trying to reconnect...' % self.host)
+            self.log.debug('Connection to "%s" seems to be down.  Trying to reconnect...', self.host)
 
             # Try to reconnect
             try:
@@ -173,11 +180,11 @@ class Client(mpd.MPDClient):
             try:
                 self.connect()
             except Exception as e:
-                self.log.critical('Unable to reconnect to "%s"' % self.host)
+                self.log.critical('Unable to reconnect to "%s"', self.host)
 
                 return False
             else:
-                self.log.debug('Reconnected to "%s"' % self.host)
+                self.log.debug('Reconnected to "%s"', self.host)
                 return True
         else:
             self.log.debug("Connection still up to %s", self.host)
@@ -200,7 +207,7 @@ class Client(mpd.MPDClient):
         self.paused = True
 
     def play(self, initial=False):
-        '''Issue mpd play command, adjusting starting position as necessary.'''
+        '''Issues mpd play command, adjusting starting position as necessary.'''
 
         # FIXME: I was checking if (self.playedSinceLastPlaylistUpdate
         # == False), but I removed that code.  I'm not sure if it's
