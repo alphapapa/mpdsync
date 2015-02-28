@@ -619,8 +619,8 @@ class Master(Client):
                 self.log.debug("First adjustment for song on slave %s", slave.host)
 
                 if len(slave.adjustments) > 5:
-                    # Adjust by average adjustment slightly reduced to
-                    # avoid swinging back and forth
+                    # Adjust by average adjustment, slightly reduced
+                    # to avoid swinging back and forth
                     adjustBy = slave.adjustments.average * 0.75
 
                     self.log.debug("Adjusting %s by average adjustment: %s", slave.host, adjustBy)
@@ -633,9 +633,9 @@ class Master(Client):
                 # Not the first adjustment for song
                 self.log.debug("Not first adjustment for song on slave %s", slave.host)
 
-                if len(slave.currentSongDifferences) < 5:
+                if len(slave.currentSongDifferences) < 3:
                     # Not enough measurements for this song
-                    self.log.debug("Not enough measurements for song on slave %s; adjusting by average ping", slave.host)
+                    self.log.debug("Not enough measurements (%s) for song on slave %s; adjusting by average ping", len(slave.currentSongDifferences), slave.host)
 
                     adjustBy = slave.pings.average
 
