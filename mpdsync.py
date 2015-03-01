@@ -912,7 +912,7 @@ class Master(Client):
             if len(slave.currentSongDifferences) >= 10:
                 # 10 or more measurements; use one-quarter of the
                 # range
-                maxDifference = slave.currentSongDifferences.range / 4
+                maxDifference = myFloat(slave.currentSongDifferences.range / 4)
 
                 # Add half the average to prevent it from being too
                 # small and causing excessive reseeks.  For some songs
@@ -922,7 +922,7 @@ class Master(Client):
             else:
                 # 5-9 measurements; use one-half of the
                 # range
-                maxDifference = slave.currentSongDifferences.range / 2
+                maxDifference = myFloat(slave.currentSongDifferences.range / 2)
 
             # Use at least half of the biggest difference to prevent
             # the occasional small range from causing unnecessary
@@ -936,14 +936,15 @@ class Master(Client):
                 self.log.debug('maxDifference too small (%s); setting maxDifference to '
                                'half of the biggest difference', maxDifference)
 
-                maxDifference = minimumMaxDifference
+                maxDifference = myFloat(minimumMaxDifference)
 
         elif slave.pings.average:
             # Use average ping
 
             # Use the larger of master or slave ping so the script can run on either one
-            maxDifference = (max([slave.pings.average, self.masterTester.pings.average])
-                             * 30)
+            maxDifference = myFloat(max([slave.pings.average,
+                                         self.masterTester.pings.average])
+                                    * 30)
 
             # But don't go over 100 ms; if it's that high, better to
             # just resync again
@@ -962,8 +963,6 @@ class Master(Client):
             # quickly or consistently, so 0.1 can cause excessive
             # reseeking in a short period of time
             maxDifference = 0.2
-
-        maxDifference = myFloat(maxDifference)
 
         self.log.debug("maxDifference for slave %s: %s", slave.host, maxDifference)
 
