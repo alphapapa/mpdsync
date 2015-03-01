@@ -23,20 +23,43 @@ DEFAULT_PORT = 6600
 FILE_PREFIX_RE = re.compile('^file: ')
 
 class myFloat(float):
-    '''Rounds and pads to 3 decimal places when printing.'''
+    '''Rounds and pads to 3 decimal places when printing.  Also overrides
+    built-in operator methods to return myFloats instead of regular
+    floats.'''
+
+    # There must be a better, cleaner way to do this, maybe using
+    # decorators or overriding __metaclass__, but I haven't been able
+    # to figure it out.  Since you can't override float's methods, you
+    # can't simply override __str__, for all floats.  And because
+    # whenever you +|-|/|* on a subclassed float, it returns a regular
+    # float, you have to also override those built-in methods to keep
+    # returning the subclass.
 
     def __init__(self, num, roundBy=3):
         super(myFloat, self).__init__(num)
         self.roundBy = roundBy
 
     def __abs__(self):
-        '''Override this so it will return another myFloat, which will print
-        rounded and padded.'''
-
         return myFloat(float.__abs__(self))
+
+    def __add__(self, val):
+        return myFloat(float.__add__(self, val))
+
+    def __div__(self, val):
+        return myFloat(float.__div__(self, val))
+
+    def __mul__(self, val):
+        return myFloat(float.__mul__(self, val))
+
+    def __sub__(self, val):
+        return myFloat(float.__sub__(self, val))
 
     def __str__(self):
         return "{:.3f}".format(round(self, self.roundBy))
+
+    # __repr__ is used in, e.g. mpd.seek(), so it gets a rounded
+    # float.  MPD doesn't support more than 3 decimal places, anyway.
+    __repr__ = __str__
 
 class AveragedList(list):
 
@@ -236,8 +259,6 @@ class Client(mpd.MPDClient):
 
                 adjustBy = self.pings.average
 
-            adjustBy = myFloat(adjustBy)
-
             self.log.debug('Adjusting initial play by %s seconds', adjustBy)
 
             # Update status (not sure if this is still necessary, but
@@ -371,7 +392,7 @@ class Client(mpd.MPDClient):
             self.ping()
             time.sleep(0.1)
 
-        self.maxDifference = myFloat(self.pings.average * 5)
+        self.maxDifference = self.pings.average * 5
 
         self.log.debug('Average ping for %s: %s seconds; setting maxDifference: %s',
                        self.host, self.pings.average, self.maxDifference)
@@ -687,7 +708,7 @@ class Master(Client):
                     # More than 5 total adjustments made to this
                     # slave.  Adjust by average adjustment, slightly
                     # reduced to avoid swinging back and forth
-                    adjustBy = myFloat(slave.adjustments.average * 0.75)
+                    adjustBy = slave.adjustments.average * 0.75
 
                     self.log.debug("Adjusting %s by average adjustment: %s", slave.host, adjustBy)
                 else:
@@ -759,7 +780,7 @@ class Master(Client):
 
                         # Invert the difference to adjust in the
                         # opposite direction of the difference.
-                        adjustBy = myFloat(slave.currentSongDifferences.average * -1)
+                        adjustBy = slave.currentSongDifferences.average * -1
 
                         self.log.debug("Adjusting %s by currentSongDifferences.average: %s", slave.host, adjustBy)
 
@@ -784,7 +805,7 @@ class Master(Client):
             #  Commenting out for now: self.status()
 
             # Calculate position
-            position = myFloat(self.elapsed - adjustBy)
+            position = self.elapsed - adjustBy
             if position < 0:
                 self.log.debug("Position for %s was < 0 (%s); skipping adjustment", slave.host, position)
 
@@ -917,7 +938,7 @@ class Master(Client):
             if len(slave.currentSongDifferences) >= 10:
                 # 10 or more measurements; use one-quarter of the
                 # range
-                maxDifference = myFloat(slave.currentSongDifferences.range / 4)
+                maxDifference = slave.currentSongDifferences.range / 4
 
                 # Add half the average to prevent it from being too
                 # small and causing excessive reseeks.  For some songs
@@ -927,7 +948,7 @@ class Master(Client):
             else:
                 # 5-9 measurements; use one-half of the
                 # range
-                maxDifference = myFloat(slave.currentSongDifferences.range / 2)
+                maxDifference = slave.currentSongDifferences.range / 2
 
             # Use at least half of the biggest difference to prevent
             # the occasional small range from causing unnecessary
@@ -941,15 +962,15 @@ class Master(Client):
                 self.log.debug('maxDifference too small (%s); setting maxDifference to '
                                'half of the biggest difference', maxDifference)
 
-                maxDifference = myFloat(minimumMaxDifference)
+                maxDifference = minimumMaxDifference
 
         elif slave.pings.average:
             # Use average ping
 
             # Use the larger of master or slave ping so the script can run on either one
-            maxDifference = myFloat(max([slave.pings.average,
-                                         self.masterTester.pings.average])
-                                    * 30)
+            maxDifference = (max([slave.pings.average,
+                                 self.masterTester.pings.average])
+                             * 30)
 
             # But don't go over 100 ms; if it's that high, better to
             # just resync again
@@ -1044,7 +1065,7 @@ class Master(Client):
         # Check pings
         masterPing = myFloat(timeFunction(master.ping))
         slavePing = myFloat(timeFunction(slave.ping))
-        ping = myFloat(abs(masterPing - slavePing))
+        ping = abs(masterPing - slavePing)
 
         self.log.debug("Last ping time for slave %s: %s", slave.host, ping)
 
@@ -1074,7 +1095,7 @@ class Master(Client):
             # Seems like it would make sense to add the
             # masterStatusLatency, but I seem to be observing that the
             # opposite is the case...
-            difference = myFloat(master.elapsed - (slave.elapsed + slaveStatusLatency))
+            difference = master.elapsed - (slave.elapsed + slaveStatusLatency)
 
             # Record the difference
             slave.currentSongDifferences.insert(0, difference)
