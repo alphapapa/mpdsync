@@ -787,7 +787,8 @@ class Master(Client):
             position = myFloat(self.elapsed - adjustBy)
             if position < 0:
                 self.log.debug("Position for %s was < 0 (%s); skipping adjustment", slave.host, position)
-                return
+
+                return False
 
             self.log.debug('Master elapsed:%s  Adjusting %s to:%s (song: %s)',
                            self.elapsed, slave.host, position, self.song)
@@ -814,6 +815,8 @@ class Master(Client):
             slave.currentSongAdjustments = 0
             slave.checkConnection()
 
+            return False
+
         else:
             # Seek succeeded
             slave.currentSongAdjustments += 1
@@ -828,6 +831,8 @@ class Master(Client):
             # half will help prevent too many consecutive adjustments
             while len(slave.currentSongDifferences) > 5:
                 slave.currentSongDifferences.pop()
+
+            return True
 
     def runElapsedLoop(self):
         '''Runs a loop trying to keep the slaves in sync with the master.'''
@@ -1001,8 +1006,10 @@ class Master(Client):
                 try:
                     # Use the masterTester object because the main
                     # master object is in idle
-                    self.masterTester.reSeekPlayer(slave)
-                    slave.reSeekedTimes += 1
+                    if self.masterTester.reSeekPlayer(slave):
+                        slave.reSeekedTimes += 1
+                    else:
+                        self.log.debug('Slave %s not resynced', slave.host)
 
                     # Give it a moment to settle before looping again
                     time.sleep(1)
