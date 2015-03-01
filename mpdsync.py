@@ -121,14 +121,26 @@ class AveragedList(list):
             self.log.debug(self)
 
 class Client(mpd.MPDClient):
+    '''Subclasses mpd.MPDClient, keeping state data, reconnecting as
+    needed, etc.'''
 
-    def __init__(self, host, port=DEFAULT_PORT, password=None, latency=0, logger=logging.NullHandler):
+    initAttrs = {None: ['currentStatus', 'lastSong',
+                        'currentSongFiletype', 'playlist',
+                        'playlistVersion', 'playlistLength',
+                        'song', 'duration', 'elapsed', 'state',
+                        'hasBeenSynced', 'playing', 'paused'],
+                 False: ['consume', 'random', 'repeat',
+                         'single']}
+
+    def __init__(self, host, port=DEFAULT_PORT, password=None, latency=0,
+                 logger=logging.NullHandler):
         self.host = host
         self.port = port
         self.password = password
         self.latency = latency
 
-        self.log = logger.getChild('%s(%s)' % (self.__class__.__name__, self.host))
+        self.log = logger.getChild('%s(%s)' %
+                                   (self.__class__.__name__, self.host))
 
         super(Client, self).__init__()
 
@@ -149,26 +161,21 @@ class Client(mpd.MPDClient):
 
         self.latency = float(latency)
 
-        for attr in ['currentStatus', 'lastSong', 'song',
-                     'currentSongFiletype', 'playlist',
-                     'playlistLength', 'playlistVersion',
-                     'hasBeenSynced', 'state', 'playing', 'paused',
-                     'duration', 'elapsed' 'consume', 'random',
-                     'repeat', 'single']:
-            setattr(self, attr, None)
-
         self.syncLoopLocked = False
-        self.hasBeenSynced = False
         self.playedSinceLastPlaylistUpdate = False
 
         self.currentSongShouldSeek = True
         self.currentSongAdjustments = 0
-        self.currentSongDifferences = AveragedList(name='currentSongDifferences', length=10)
+        self.currentSongDifferences = AveragedList(name='currentSongDifferences',
+                                                   length=10)
 
         self.pings = AveragedList(name='%s.pings' % self.host, length=10)
 
         self.adjustments = AveragedList(name='%sadjustments' % self.host, length=20)
-        self.initialPlayTimes = AveragedList(name='%s.initialPlayTimes' % self.host, length=20, printDebug=True)
+        self.initialPlayTimes = AveragedList(name='%s.initialPlayTimes' %
+                                             self.host, length=20, printDebug=True)
+
+        # MAYBE: Should I reset this in _initAttrs() ?
         self.reSeekedTimes = 0
 
         # Record adjustments by file type to see if there's a pattern
@@ -187,18 +194,21 @@ class Client(mpd.MPDClient):
     def checkConnection(self):
         '''Pings the daemon and tries to reconnect if necessary.'''
 
-        # I don't know why this is necessary, but for some reason the slave connections tend to get dropped.
+        # I don't know why this is necessary, but for some reason the
+        # slave connections tend to get dropped.
         try:
             self.ping()
 
         except Exception as e:
-            self.log.debug('Connection to "%s" seems to be down.  Trying to reconnect...', self.host)
+            self.log.debug('Connection to "%s" seems to be down.  Trying to reconnect...',
+                           elf.host)
 
             # Try to disconnect first
             try:
                 self.disconnect()  # Maybe this will help it reconnect next time around...
             except Exception as e:
-                self.log.exception("Couldn't DISconnect from client %s.  SIGH: %s", self.host, e)
+                self.log.exception("Couldn't DISconnect from client %s.  SIGH: %s",
+                                   self.host, e)
 
             # Try to reconnect
             try:
@@ -220,6 +230,11 @@ class Client(mpd.MPDClient):
     def connect(self):
         '''Connects to the daemon, sets the password if necessary, and tests
         the ping time.'''
+
+        # Reset initial values
+        for val, attrs in self.initAttrs.iteritems():
+            for attr in attrs:
+                setattr(self, attr, val)
 
         super(Client, self).connect(self.host, self.port)
 
@@ -275,7 +290,8 @@ class Client(mpd.MPDClient):
             try:
                 self.command_list_ok_begin()
             except mpd.CommandListError as e:
-                # Server was already in a command list; probably a lost client connection, so try again
+                # Server was already in a command list; probably a
+                # lost client connection, so try again
                 self.log.exception("mpd.CommandListError: %s", e)
 
                 self.command_list_end()
@@ -333,50 +349,55 @@ class Client(mpd.MPDClient):
 
         self.currentStatus = super(Client, self).status()
 
-        # Wrap whole thing in try/except because of MPD protocol errors...sigh
+        # Wrap whole thing in try/except because of MPD protocol
+        # errors.  But I may have fixed this by "locking" each client
+        # in the loop, so this may not be necessary anymore.
         try:
 
-            # Not sure why, but sometimes this ends up as None when the track or playlist is changed...?
+            # Not sure why, but sometimes this ends up as None when
+            # the track or playlist is changed...?
             if self.currentStatus:
                 # Status response received
 
-                self.song = self.currentStatus['song'] if 'song' in self.currentStatus else None
-
-                for attr in ['duration', 'elapsed']:
-                    val = myFloat(self.currentStatus[attr]) if attr in self.currentStatus else None
-                    setattr(self, attr, val)
-
+                # Set playlist attrs
                 self.playlistLength = int(self.currentStatus['playlistlength'])
                 if self.playlist:
-                    self.currentSongFiletype = self.playlist[int(self.song)].split('.')[-1]
+                    self.currentSongFiletype = (
+                        self.playlist[int(self.song)].split('.')[-1])
 
-                    self.log.debug('Current filetype: %s', self.currentSongFiletype)
+                    self.log.debug('Current filetype: %s',
+                                   self.currentSongFiletype)
 
-                for attr in ['consume', 'random', 'repeat', 'single']:
-                    val = True if self.currentStatus[attr] == '1' else False
+                # Set True/False attrs
+                for attr in self.initAttrs[False]:
+                    val = (True
+                           if self.currentStatus[attr] == '1'
+                           else False)
                     setattr(self, attr, val)
 
+                # Set playing state attrs
                 self.state = self.currentStatus['state']
-                self.playing = True if self.state == 'play' else False
-                self.paused = True if self.state == 'pause' else False
+                self.playing = (True
+                                if self.state == 'play'
+                                else False)
+                self.paused = (True
+                               if self.state == 'pause'
+                               else False)
+
+                # Set song attrs
+                self.song = (self.currentStatus['song']
+                             if 'song' in self.currentStatus
+                             else None)
+                for attr in ['duration', 'elapsed']:
+                    val = (myFloat(self.currentStatus[attr])
+                           if attr in self.currentStatus
+                           else None)
+                    setattr(self, attr, val)
 
             else:
-                # None?  Sigh...
-
-                self.playlistLength = None
-
-                self.song = None
-                self.duration = None
-                self.elapsed = None
-
-                self.consume = False
-                self.random = False
-                self.repeat = False
-                self.single = False
-
-                self.state = None
-                self.playing = False
-                self.paused = False
+                # None?  Sigh...  This shouldn't happen...if it does
+                # I'll need to reconnect, I think...
+                self.log.error("No status received for client %s", self.host)
 
         except Exception as e:
             # No status response :(
@@ -460,7 +481,8 @@ class Master(Client):
             # TODO: Put this in a function?
             slave.currentSongShouldSeek = True
             slave.numCurrentSongAdjustments = 0
-            slave.currentSongDifferences = AveragedList(name='%s.currentSongDifferences' % slave.host, length=10)
+            slave.currentSongDifferences = AveragedList(name='%s.currentSongDifferences' %
+                                                        slave.host, length=10)
             slave.lastSong = slave.song
 
         if slave.elapsed:
