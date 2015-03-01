@@ -522,7 +522,8 @@ class Master(Client):
         try:
             slave.connect()
         except Exception as e:
-            self.log.exception('Unable to connect to slave: %s:%s: %s', slave.host, slave.port, e)
+            self.log.exception('Unable to connect to slave: %s:%s: %s',
+                               slave.host, slave.port, e)
         else:
             self.log.debug('Connected to slave: %s' % slave.host)
 
@@ -568,7 +569,8 @@ class Master(Client):
                 slave.getPlaylist()
                 if slave.playlist != self.playlist:
                     # Playlists differ
-                    self.log.debug("Playlist differs on slave %s; syncing...", slave.host)
+                    self.log.debug("Playlist differs on slave %s; syncing...",
+                                   slave.host)
 
                     #Start command list
                     slave.command_list_ok_begin()
@@ -585,10 +587,12 @@ class Master(Client):
                     result = slave.command_list_end()
 
                     if not result:
-                        self.log.critical("Couldn't add tracks to playlist on slave: %s", slave.host)
+                        self.log.critical("Couldn't add tracks to playlist on slave: %s",
+                                          slave.host)
                         continue
                     else:
-                        self.log.debug("Added to playlist on slave %s, result: %s", slave.host, result)
+                        self.log.debug("Added to playlist on slave %s, result: %s",
+                                       slave.host, result)
 
                         slave.hasBeenSynced = True
 
@@ -611,7 +615,8 @@ class Master(Client):
 
                 # Make changes
                 for change in changes:
-                    self.log.debug('Adding to slave:"%s" file:"%s" at pos:%s', slave.host, change['file'], change['pos'])
+                    self.log.debug('Adding to slave:"%s" file:"%s" at pos:%s',
+                                   slave.host, change['file'], change['pos'])
 
                     slave.addid(change['file'], change['pos'])
 
@@ -711,7 +716,8 @@ class Master(Client):
 
                     # Don't re-sync if the slave is already playing the same song
                     if slave.playing and slave.song == self.song:
-                        self.log.debug('Playing slave %s, master already playing same song' % slave.host)
+                        self.log.debug('Playing slave %s, master already playing same song',
+                                       slave.host)
 
                         # BUG: If -l is not set, then this won't sync the playing position.
 
@@ -743,7 +749,8 @@ class Master(Client):
 
                             return False
 
-                        self.log.debug('Client %s took %s seconds to start playing' % (slave.host, playLatency))
+                            self.log.debug('Client %s took %s seconds to start playing',
+                                           slave.host, playLatency)
 
                         # Update initial play times
                         slave.initialPlayTimes.insert(0, playLatency)
@@ -754,7 +761,8 @@ class Master(Client):
                     slave.stop()
 
             except Exception as e:
-                self.log.exception("Unable to syncPlayer for slave %s.  Tries:%s  Error:%s", slave.host, tries, e)
+                self.log.exception("Unable to syncPlayer for slave %s.  Tries:%s  Error:%s",
+                                   slave.host, tries, e)
                 tries += 1
             else:
                 # Sync succeeded
@@ -1001,7 +1009,8 @@ class Seeker(Master):
 
                 # Wait until at least 2 measurements
                 if len(slave.currentSongDifferences) < 2:
-                    self.log.debug('Only %s measurements for current song; skipping adjustment', len(slave.currentSongDifferences))
+                    self.log.debug('Only %s measurements for current song; skipping adjustment',
+                                   len(slave.currentSongDifferences))
 
                     return False
 
@@ -1024,7 +1033,8 @@ class Seeker(Master):
 
                 if len(slave.currentSongDifferences) < 3:
                     # Not enough measurements for this song
-                    self.log.debug("Not enough measurements (%s) for song on slave %s; adjusting by average ping",
+                    self.log.debug("Not enough measurements (%s) for song on slave %s; "
+                                   "adjusting by average ping",
                                    len(slave.currentSongDifferences), slave.host)
 
                     adjustBy = slave.pings.average
@@ -1048,7 +1058,8 @@ class Seeker(Master):
                         # Too many adjustments for this song.  Try average
                         # ping to settle back down.  Some songs just don't
                         # seek reliably or something.
-                        self.log.debug("Too many adjustments (%s) for song on slave %s; adjusting by average ping",
+                        self.log.debug("Too many adjustments (%s) for song on slave %s; "
+                                       "adjusting by average ping",
                                        slave.numCurrentSongAdjustments, slave.host)
 
                         adjustBy = slave.pings.average
@@ -1083,7 +1094,8 @@ class Seeker(Master):
                         # opposite direction of the difference.
                         adjustBy = slave.currentSongDifferences.average * -1
 
-                        self.log.debug("Adjusting %s by currentSongDifferences.average: %s", slave.host, adjustBy)
+                        self.log.debug("Adjusting %s by currentSongDifferences.average: %s",
+                                       slave.host, adjustBy)
 
             # TODO: If the difference is too great, it seems that the
             # slave MPD has hit a bug where it thinks that song
@@ -1108,7 +1120,8 @@ class Seeker(Master):
             # Calculate position
             position = self.elapsed - adjustBy
             if position < 0:
-                self.log.debug("Position for %s was < 0 (%s); skipping adjustment", slave.host, position)
+                self.log.debug("Position for %s was < 0 (%s); skipping adjustment",
+                               slave.host, position)
 
                 return False
 
@@ -1228,7 +1241,8 @@ def main():
         return False
 
     # Connect to the master server
-    master = Master(host=args.master, password=args.password, adjustLatency=args.adjustLatency, logger=log)
+    master = Master(host=args.master, password=args.password,
+                    adjustLatency=args.adjustLatency, logger=log)
 
     try:
         master.connect()
