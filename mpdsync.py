@@ -677,6 +677,12 @@ class Master(Client):
                 # First adjustment for song
                 self.log.debug("First adjustment for song on slave %s", slave.host)
 
+                # Wait until at least 2 measurements
+                if len(slave.currentSongDifferences) < 2:
+                    self.log.debug('Only %s measurements for current song; skipping adjustment', len(slave.currentSongDifferences))
+
+                    return False
+
                 if len(slave.adjustments) > 5:
                     # More than 5 total adjustments made to this
                     # slave.  Adjust by average adjustment, slightly
