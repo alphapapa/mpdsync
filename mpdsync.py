@@ -201,7 +201,7 @@ class Client(mpd.MPDClient):
 
         except Exception as e:
             self.log.debug('Connection to "%s" seems to be down.  Trying to reconnect...',
-                           elf.host)
+                           self.host)
 
             # Try to disconnect first
             try:
