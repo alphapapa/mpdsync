@@ -1064,15 +1064,6 @@ class Master(Client):
             # opposite is the case...
             difference = myFloat(master.elapsed - (slave.elapsed + slaveStatusLatency))
 
-            # If difference is too big, discard it, probably I/O
-            # latency on the other end or something
-            # if (len(slave.currentSongDifferences) > 1 and
-            #     (slave.currentSongDifferences.average != 0) and
-            #     (abs(difference) > (abs(slave.currentSongDifferences.average) * 100))):
-
-            #     self.log.debug("Difference too great, discarding: %s  Average:%s" % (difference, slave.currentSongDifferences.average))
-            #     return 0
-
             # Record the difference
             slave.currentSongDifferences.insert(0, difference)
 
