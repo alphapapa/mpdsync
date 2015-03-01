@@ -673,7 +673,7 @@ class Master(Client):
         else:
             # Calculate adjustment automatically
 
-            if slave.currentSongAdjustments < 1:
+            if slave.numCurrentSongAdjustments < 1:
                 # First adjustment for song
                 self.log.debug("First adjustment for song on slave %s", slave.host)
 
@@ -722,23 +722,23 @@ class Master(Client):
                     # resyncs based on ping...which may mess up a
                     # well-synced song.  :(
 
-                    if slave.currentSongAdjustments > 10:
+                    if slave.numCurrentSongAdjustments > 10:
                         # Too many adjustments for this song.  Try average
                         # ping to settle back down.  Some songs just don't
                         # seek reliably or something.
                         self.log.debug("Too many adjustments (%s) for song on slave %s; adjusting by average ping",
-                                       slave.currentSongAdjustments, slave.host)
+                                       slave.numCurrentSongAdjustments, slave.host)
 
                         adjustBy = slave.pings.average
 
-                        # Reduce number of currentSongAdjustments to
-                        # give it a chance to use song adjustments
-                        # again instead of reusing average ping until
-                        # the song ends; but don't reset it
-                        # completely, because if using the average
-                        # song adjustment isn't working, it might be
-                        # better to use the ping sooner
-                        slave.currentSongAdjustments = 5
+                        # Reduce numCurrentSongAdjustments to give it
+                        # a chance to use song adjustments again
+                        # instead of reusing average ping until the
+                        # song ends; but don't reset it completely,
+                        # because if using the average song adjustment
+                        # isn't working, it might be better to use the
+                        # ping sooner
+                        slave.numCurrentSongAdjustments = 5
 
                     else:
                         # Just the right number of measurements for
@@ -812,14 +812,14 @@ class Master(Client):
 
             # Clear song adjustments to prevent wild jittering after
             # seek timeouts
-            slave.currentSongAdjustments = 0
+            slave.numCurrentSongAdjustments = 0
             slave.checkConnection()
 
             return False
 
         else:
             # Seek succeeded
-            slave.currentSongAdjustments += 1
+            slave.numCurrentSongAdjustments += 1
 
             # Don't record adjustment if it's just the average ping
             if adjustBy != slave.pings.average:
@@ -1065,7 +1065,7 @@ class Master(Client):
 
             # TODO: Put this in a function?
             slave.currentSongShouldSeek = True
-            slave.currentSongAdjustments = 0
+            slave.numCurrentSongAdjustments = 0
             slave.currentSongDifferences = AveragedList(name='%s.currentSongDifferences' % slave.host, length=10)
             slave.lastSong = slave.song
 
