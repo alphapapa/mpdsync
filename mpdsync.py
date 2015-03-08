@@ -922,14 +922,18 @@ class Seeker(Master):
 
         self.log.debug("maxDifference for slave %s: %s", slave.host, maxDifference)
 
-        # If the average difference is less than 30ms, and there are
-        # enough measurements, stop seeking until the next song.  Do
-        # this down here so we can still watch measurements.
+        # If the average difference is less than 30ms, and the range
+        # is less than 300ms, and there are enough measurements, stop
+        # seeking until the next song.  Do this down here so we can
+        # still watch measurements.
         if (len(slave.currentSongDifferences) >= 10
+            and slave.currentSongDifferences.range <= 0.300
             and abs(slave.currentSongDifferences.average) < 0.030):
+
             self.log.debug('Average difference below 30ms; not seeking this song anymore')
 
             slave.currentSongShouldSeek = False
+
             return
 
         # Adjust if difference is too big
