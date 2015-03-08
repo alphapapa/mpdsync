@@ -749,8 +749,8 @@ class Master(Client):
 
                             return False
 
-                            self.log.debug('Client %s took %s seconds to start playing',
-                                           slave.host, playLatency)
+                        self.log.debug('Client %s took %s seconds to start playing',
+                                       slave.host, playLatency)
 
                         # Update initial play times
                         slave.initialPlayTimes.insert(0, playLatency)
@@ -978,7 +978,7 @@ class Seeker(Master):
                     try:
                         slave.checkConnection()
                     except:
-                        self.log.error("Couldn't reconnect to slave %s", slave.host)
+                        self.log.exception("Couldn't reconnect to slave %s", slave.host)
 
     def _reSeekPlayer(self, slave):
         '''Seeks the slave to the master's playing position.'''
