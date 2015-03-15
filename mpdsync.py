@@ -22,7 +22,7 @@ if mpd.VERSION < (0, 5, 4):
 DEFAULT_PORT = 6600
 FILE_PREFIX_RE = re.compile('^file: ')
 
-class myFloat(float):
+class MyFloat(float):
     '''Rounds and pads to 3 decimal places when printing.  Also overrides
     built-in operator methods to return myFloats instead of regular
     floats.'''
@@ -36,23 +36,23 @@ class myFloat(float):
     # returning the subclass.
 
     def __init__(self, num, roundBy=3):
-        super(myFloat, self).__init__(num)
+        super(MyFloat, self).__init__(num)
         self.roundBy = roundBy
 
     def __abs__(self):
-        return myFloat(float.__abs__(self))
+        return MyFloat(float.__abs__(self))
 
     def __add__(self, val):
-        return myFloat(float.__add__(self, val))
+        return MyFloat(float.__add__(self, val))
 
     def __div__(self, val):
-        return myFloat(float.__div__(self, val))
+        return MyFloat(float.__div__(self, val))
 
     def __mul__(self, val):
-        return myFloat(float.__mul__(self, val))
+        return MyFloat(float.__mul__(self, val))
 
     def __sub__(self, val):
-        return myFloat(float.__sub__(self, val))
+        return MyFloat(float.__sub__(self, val))
 
     def __str__(self):
         return "{:.3f}".format(round(self, self.roundBy))
@@ -90,21 +90,23 @@ class AveragedList(list):
     __repr__ = __str__
 
     def append(self, arg):
-        arg = myFloat(arg)
+        arg = MyFloat(arg)
         super(AveragedList, self).append(arg)
         self._updateStats()
 
     def clear(self):
+        '''Empties the list.'''
+
         while len(self) > 0:
             self.pop()
 
     def extend(self, *args):
-        args = [[myFloat(a) for l in args for a in l]]
+        args = [[MyFloat(a) for l in args for a in l]]
         super(AveragedList, self).extend(*args)
         self._updateStats()
 
     def insert(self, pos, *args):
-        args = [myFloat(a) for a in args]
+        args = [MyFloat(a) for a in args]
         super(AveragedList, self).insert(pos, *args)
 
         while len(self) > self.length:
@@ -112,10 +114,10 @@ class AveragedList(list):
         self._updateStats()
 
     def _updateStats(self):
-        self.average = myFloat(sum(self) / len(self))
-        self.max = myFloat(max(self))
-        self.min = myFloat(min(self))
-        self.range = myFloat(self.max - self.min)
+        self.average = MyFloat(sum(self) / len(self))
+        self.max = MyFloat(max(self))
+        self.min = MyFloat(min(self))
+        self.range = MyFloat(self.max - self.min)
 
         if self.printDebug:
             self.log.debug(self)
@@ -133,23 +135,18 @@ class Client(mpd.MPDClient):
                          'single']}
 
     def __init__(self, host, port=DEFAULT_PORT, password=None, latency=0,
-                 logger=logging.NullHandler):
-        self.host = host
-        self.port = port
-        self.password = password
-        self.latency = latency
-
-        self.log = logger.getChild('%s(%s)' %
-                                   (self.__class__.__name__, self.host))
+                 logger=None):
 
         super(Client, self).__init__()
 
-        # Command timeout...should never take longer than a second, I
-        # think...
+        # Command timeout
         self.timeout = 10
 
+        # Split host/latency
         if '/' in host:
             host, latency = host.split('/')
+        # TODO: Verify latency number (or just remove this?)
+        self.latency = float(latency)
 
         # Split host/port
         if ':' in host:
@@ -159,21 +156,23 @@ class Client(mpd.MPDClient):
         self.port = port
         self.password = password
 
-        self.latency = float(latency)
+        self.log = logger.getChild('%s(%s)' %
+                                   (self.__class__.__name__, self.host))
 
         self.syncLoopLocked = False
         self.playedSinceLastPlaylistUpdate = False
 
         self.currentSongShouldSeek = True
         self.currentSongAdjustments = 0
-        self.currentSongDifferences = AveragedList(name='currentSongDifferences',
-                                                   length=10)
+        self.currentSongDifferences = AveragedList(
+            name='currentSongDifferences', length=10)
 
         self.pings = AveragedList(name='%s.pings' % self.host, length=10)
-
-        self.adjustments = AveragedList(name='%sadjustments' % self.host, length=20)
-        self.initialPlayTimes = AveragedList(name='%s.initialPlayTimes' %
-                                             self.host, length=20, printDebug=True)
+        self.adjustments = AveragedList(name='%sadjustments' % self.host,
+                                        length=20)
+        self.initialPlayTimes = AveragedList(name='%s.initialPlayTimes'
+                                             % self.host, length=20,
+                                             printDebug=True)
 
         # MAYBE: Should I reset this in _initAttrs() ?
         self.reSeekedTimes = 0
@@ -200,14 +199,14 @@ class Client(mpd.MPDClient):
             self.ping()
 
         except Exception as e:
-            self.log.debug('Connection to "%s" seems to be down.  Trying to reconnect...',
-                           self.host)
+            self.log.debug('Connection to "%s" seems to be down.  '
+                           'Trying to reconnect...', self.host)
 
             # Try to disconnect first
             try:
-                self.disconnect()  # Maybe this will help it reconnect next time around...
+                self.disconnect()  # Maybe this will help it reconnect
             except Exception as e:
-                self.log.exception("Couldn't DISconnect from client %s.  SIGH: %s",
+                self.log.exception("Couldn't DISconnect from client %s: %s",
                                    self.host, e)
 
             # Try to reconnect
@@ -389,7 +388,7 @@ class Client(mpd.MPDClient):
                              if 'song' in self.currentStatus
                              else None)
                 for attr in ['duration', 'elapsed']:
-                    val = (myFloat(self.currentStatus[attr])
+                    val = (MyFloat(self.currentStatus[attr])
                            if attr in self.currentStatus
                            else None)
                     setattr(self, attr, val)
@@ -401,7 +400,8 @@ class Client(mpd.MPDClient):
 
         except Exception as e:
             # No status response :(
-            self.log.exception("Unable to get status for client %s: %s", self.host, e)
+            self.log.exception("Unable to get status for client %s: %s",
+                               self.host, e)
 
             # Try to reconnect
             self.checkConnection()
@@ -420,7 +420,8 @@ class Client(mpd.MPDClient):
 
         self.maxDifference = self.pings.average * 5
 
-        self.log.debug('Average ping for %s: %s seconds; setting maxDifference: %s',
+        self.log.debug('Average ping for %s: %s seconds; '
+                       'setting maxDifference: %s',
                        self.host, self.pings.average, self.maxDifference)
 
 class Master(Client):
@@ -457,32 +458,33 @@ class Master(Client):
         # this somehow.  Sigh.
 
         # Check pings
-        masterPing = myFloat(timeFunction(master.ping))
-        slavePing = myFloat(timeFunction(slave.ping))
+        masterPing = MyFloat(timeFunction(master.ping))
+        slavePing = MyFloat(timeFunction(slave.ping))
         ping = abs(masterPing - slavePing)
 
         self.log.debug("Last ping time for slave %s: %s", slave.host, ping)
 
         # Get master status and time how long it takes
-        masterStatusLatency = myFloat(timeFunction(master.status))
+        masterStatusLatency = MyFloat(timeFunction(master.status))
 
         self.log.debug("masterStatusLatency:%s", masterStatusLatency)
 
         # Get slave status and time how long it takes
-        slaveStatusLatency = myFloat(timeFunction(slave.status))
+        slaveStatusLatency = MyFloat(timeFunction(slave.status))
 
         self.log.debug("slaveStatusLatency:%s", slaveStatusLatency)
 
         # If song changed, reset differences
         if slave.lastSong != slave.song:
-            self.log.debug("Song changed (%s -> %s); resetting %s.currentSongDifferences",
+            self.log.debug("Song changed (%s -> %s); "
+                           "resetting %s.currentSongDifferences",
                            slave.lastSong, slave.song, slave.host)
 
             # TODO: Put this in a function?
             slave.currentSongShouldSeek = True
             slave.numCurrentSongAdjustments = 0
-            slave.currentSongDifferences = AveragedList(name='%s.currentSongDifferences' %
-                                                        slave.host, length=10)
+            slave.currentSongDifferences = AveragedList(
+                name='%s.currentSongDifferences' % slave.host, length=10)
             slave.lastSong = slave.song
 
         if slave.elapsed:
@@ -504,7 +506,8 @@ class Master(Client):
             return difference
 
     def status(self):
-        '''Gets the master's status and updates its playlistVersion attribute.'''
+        '''Gets the master's status and updates its playlistVersion
+        attribute.'''
 
         super(Master, self).status()
 
@@ -832,7 +835,7 @@ class Seeker(Master):
 
                 # Print comparison between two slaves
                 if len(self.slaves) > 1:
-                    self.slaveDifferences.insert(0, abs(self.slaves[0].currentSongDifferences.average \
+                    self.slaveDifferences.insert(0, abs(self.slaves[0].currentSongDifferences.average
                                                         - self.slaves[1].currentSongDifferences.average))
                     self.log.debug("Average difference between slaves 1 and 2: %s",
                                    self.slaveDifferences.average)
@@ -920,7 +923,8 @@ class Seeker(Master):
             # reseeking in a short period of time
             maxDifference = 0.2
 
-        self.log.debug("maxDifference for slave %s: %s", slave.host, maxDifference)
+        self.log.debug("maxDifference for slave %s: %s",
+                           slave.host, maxDifference)
 
         # If the average difference is less than 30ms, and the range
         # is less than 300ms, and there are enough measurements, stop
@@ -1002,7 +1006,7 @@ class Seeker(Master):
             # Use the user-set adjustment
             self.log.debug("Adjusting %s by slave.latency: %s", slave.host, slave.latency)
 
-            adjustBy = myFloat(slave.latency)
+            adjustBy = MyFloat(slave.latency)
 
         else:
             # Calculate adjustment automatically
@@ -1232,8 +1236,8 @@ def main():
         log.addHandler(handler)
         log.setLevel(LOG_LEVEL)
 
-    log.debug('Using python-mpd version: %s' % str(mpd.VERSION))
-    log.debug("Args: %s" % args)
+    log.debug('Using python-mpd version: %s', str(mpd.VERSION))
+    log.debug("Args: %s", args)
 
     # Check args
     if not args.master:
@@ -1251,7 +1255,7 @@ def main():
     try:
         master.connect()
     except Exception as e:
-        log.exception('Unable to connect to master server: %s' % e)
+        log.exception('Unable to connect to master server: %s', e)
         return False
     else:
         log.debug('Connected to master server.')
