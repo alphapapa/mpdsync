@@ -1,9 +1,10 @@
 #!/usr/bin/env python
 
-# mpdsync.py
+# * mpdsync.py
 # Originally written by Nick Pegg <https://github.com/nickpegg/mpdsync>
 # Rewritten and updated to use python-mpd2 by Adam Porter <adam@alphapapa.net>
 
+# ** Imports
 import argparse
 from collections import defaultdict
 import logging
@@ -19,9 +20,11 @@ if mpd.VERSION < (0, 5, 4):
     print 'ERROR: This script requires python-mpd2 >= 0.5.4.'
     sys.exit(1)
 
+# ** Constants
 DEFAULT_PORT = 6600
 FILE_PREFIX_RE = re.compile('^file: ')
 
+# ** Classes
 class MyFloat(float):
     '''Rounds and pads to 3 decimal places when printing.  Also overrides
     built-in operator methods to return myFloats instead of regular
@@ -1178,6 +1181,7 @@ class Seeker(Master):
             return True
 
 
+# ** Functions
 def timeFunction(f):
     t1 = time.time()
     f()
