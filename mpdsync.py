@@ -137,7 +137,7 @@ class Client(mpd.MPDClient):
                  False: ['consume', 'random', 'repeat',
                          'single']}
 
-    def __init__(self, host, port=DEFAULT_PORT, password=None, latency=0,
+    def __init__(self, host, port=DEFAULT_PORT, password=None, latency=None,
                  logger=None):
 
         super(Client, self).__init__()
@@ -148,8 +148,11 @@ class Client(mpd.MPDClient):
         # Split host/latency
         if '/' in host:
             host, latency = host.split('/')
-        # TODO: Verify latency number (or just remove this?)
-        self.latency = float(latency)
+
+        if latency is not None:
+            self.latency = float(latency)
+        else:
+            self.latency = None
 
         # Split host/port
         if ':' in host:
@@ -269,7 +272,7 @@ class Client(mpd.MPDClient):
             self.log.debug("%s.play(initial=True)", self.host)
 
             # Calculate adjustment
-            if self.latency:
+            if self.latency is not None:
                 # Use user-set adjustment
                 adjustBy = self.latency
             elif self.initialPlayTimes.average:
@@ -1005,7 +1008,7 @@ class Seeker(Master):
         slave.checkConnection()
 
         # Choose adjustment
-        if slave.latency:
+        if slave.latency is not None:
             # Use the user-set adjustment
             self.log.debug("Adjusting %s by slave.latency: %s", slave.host, slave.latency)
 
