@@ -1131,16 +1131,16 @@ class Seeker(Master):
             #  again; that might require redoing the calculations.
             #  Commenting out for now: self.status()
 
-            # Calculate position
-            position = self.elapsed - adjustBy
-            if position < 0:
-                self.log.debug("Position for %s was < 0 (%s); skipping adjustment",
-                               slave.host, position)
+        # Calculate position
+        position = self.elapsed - adjustBy
+        if position < 0:
+            self.log.debug("Position for %s was < 0 (%s); skipping adjustment",
+                           slave.host, position)
 
-                return False
+            return False
 
-            self.log.debug('Master elapsed:%s  Adjusting %s to:%s (song: %s)',
-                           self.elapsed, slave.host, position, self.song)
+        self.log.debug('Master elapsed:%s  Adjusting %s to:%s (song: %s)',
+                       self.elapsed, slave.host, position, self.song)
 
         # For some reason this is getting weird errors like
         # "mpd.ProtocolError: Got unexpected return value: 'volume:
