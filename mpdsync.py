@@ -367,8 +367,18 @@ class Client(mpd.MPDClient):
                 # Set playlist attrs
                 self.playlistLength = int(self.currentStatus['playlistlength'])
                 if self.playlist:
-                    self.currentSongFiletype = (
-                        self.playlist[int(self.song)].split('.')[-1])
+                    self.log.debug('Current playlist length: %s',
+                                   len(self.playlist))
+
+                    if self.song:
+                        self.log.debug('Current song: %s:%s',
+                                       self.song,
+                                       self.playlist[int(self.song)])
+
+                        self.currentSongFiletype = (
+                            self.playlist[int(self.song)].split('.')[-1])
+                    else:
+                        self.currentSongFiletype = None
 
                     self.log.debug('Current filetype: %s',
                                    self.currentSongFiletype)
