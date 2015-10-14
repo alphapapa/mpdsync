@@ -64,6 +64,7 @@ class MyFloat(float):
     # float.  MPD doesn't support more than 3 decimal places, anyway.
     __repr__ = __str__
 
+
 class AveragedList(list):
 
     def __init__(self, data=None, length=None, name=None, printDebug=False):
@@ -124,6 +125,7 @@ class AveragedList(list):
 
         if self.printDebug:
             self.log.debug(self)
+
 
 class Client(mpd.MPDClient):
     '''Subclasses mpd.MPDClient, keeping state data, reconnecting as
@@ -438,6 +440,7 @@ class Client(mpd.MPDClient):
         self.log.debug('Average ping for %s: %s seconds; '
                        'setting maxDifference: %s',
                        self.host, self.pings.average, self.maxDifference)
+
 
 class Master(Client):
     def __init__(self, *args, **kwargs):
