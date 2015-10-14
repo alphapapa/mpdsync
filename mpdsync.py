@@ -367,16 +367,15 @@ class Client(mpd.MPDClient):
                 # Set playlist attrs
                 self.playlistLength = int(self.currentStatus['playlistlength'])
                 if self.playlist:
-                    self.log.debug('Current playlist length: %s',
-                                   len(self.playlist))
-
                     if self.song:
-                        self.log.debug('Current song: %s:%s',
-                                       self.song,
-                                       self.playlist[int(self.song)])
-
-                        self.currentSongFiletype = (
-                            self.playlist[int(self.song)].split('.')[-1])
+                        if int(self.song) >= len(self.playlist):
+                            self.log.exception(
+                                'Current song number > (playlist length - 1)'
+                                ' (%s>%s).  What is causing this pesky bug?',
+                                int(self.song), len(self.playlist))
+                        else:
+                            self.currentSongFiletype = (
+                                self.playlist[int(self.song)].split('.')[-1])
                     else:
                         self.currentSongFiletype = None
 
