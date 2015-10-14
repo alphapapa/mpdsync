@@ -474,8 +474,10 @@ class Master(Client):
         # this somehow.  Sigh.
 
         # Check pings
-        masterPing = MyFloat(timeFunction(master.ping))
-        slavePing = MyFloat(timeFunction(slave.ping))
+        master.ping()
+        slave.ping()
+        masterPing = master.pings[0]
+        slavePing = slave.pings[0]
         ping = abs(masterPing - slavePing)
 
         self.log.debug("Last ping time for slave %s: %s", slave.host, ping)
