@@ -732,15 +732,20 @@ class Master(Client):
                 # Reconnect if connection dropped
                 slave.checkConnection()
 
+                # Update slave status
+                slave.status()
+
                 # Sync player status
                 if self.playing:
 
-                    # Don't re-sync if the slave is already playing the same song
-                    if slave.playing and slave.song == self.song:
-                        self.log.debug('Playing slave %s, master already playing same song',
-                                       slave.host)
+                    # Don't re-sync if the slave is already playing
+                    # the same song at the right place
+                    if (slave.playing and
+                        slave.song == self.song and
+                        self._compareElapsed(self, slave) < 1):
 
-                        # BUG: If -l is not set, then this won't sync the playing position.
+                        self.log.debug('Slave %s and master already playing same song, less than 1 second apart',
+                                       slave.host)
 
                     else:
                         # Slave not playing, or playing a different song
