@@ -869,6 +869,8 @@ class Seeker(Master):
                 # Not playing; sleep 2 seconds
                 sleepTime = 2
 
+                # TODO: Instead, stop this thread, and restart it when playing resumes
+
             # BUG: If there are multiple slaves, this sleeps for
             # whatever sleepTime was set to for the last slave.  Not a
             # big deal, but might need fixing.
