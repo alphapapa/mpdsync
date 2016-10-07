@@ -1055,7 +1055,7 @@ class Seeker(Master):
                     # reduced to avoid swinging back and forth
                     adjustBy = slave.adjustments.average * 0.75
 
-                    self.log.debug("Adjusting %s by average adjustment: %s", slave.host, adjustBy)
+                    self.log.debug("Adjusting %s by average slave adjustment: %s", slave.host, adjustBy)
                 else:
                     # 5 or fewer total adjustments made to this slave.
                     # Adjust by average ping
