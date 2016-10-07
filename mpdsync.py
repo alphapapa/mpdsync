@@ -503,6 +503,8 @@ class Master(Client):
             # TODO: Put this in a function?
             slave.currentSongShouldSeek = True
             slave.numCurrentSongAdjustments = 0
+            slave.currentSongAdjustments = AveragedList(
+                name='%s.currentSongAdjustments' % slave.host, length=10, printDebug=True)
             slave.currentSongDifferences = AveragedList(
                 name='%s.currentSongDifferences' % slave.host, length=10)
             slave.lastSong = slave.song
@@ -522,6 +524,7 @@ class Master(Client):
             self.log.debug('Master/%s elapsed:%s/%s  Difference:%s',
                       slave.host, master.elapsed, slave.elapsed, difference)
             self.log.debug(slave.currentSongDifferences)
+            self.log.debug(slave.currentSongAdjustments)
 
             return difference
 
@@ -1198,6 +1201,7 @@ class Seeker(Master):
             if adjustBy != slave.pings.average:
                 # It wasn't; record it
                 slave.adjustments.insert(0, adjustBy)
+                slave.currentSongAdjustments.append(adjustBy)
                 slave.fileTypeAdjustments[slave.currentSongFiletype].append(adjustBy)
 
             # Reset song differences (maybe this or just cutting it in
