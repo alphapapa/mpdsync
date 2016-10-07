@@ -1142,10 +1142,14 @@ class Seeker(Master):
             # track seems to fix it.
 
             # Sometimes the adjustment goes haywire.  If it's greater
-            # than 1% of the song duration, or greater than 1 second, adjust by average ping
+            # than 1% of the song duration, or greater than 1 second,
+            # or greater than the range of adjustments already made to
+            # this song, adjust by average ping
             absAdjustBy = abs(adjustBy)
-            if ((slave.duration and absAdjustBy > slave.duration * 0.01)
-                or absAdjustBy > 1):
+            if (absAdjustBy > 1
+                or (slave.duration and absAdjustBy > slave.duration * 0.01)
+                or (len(slave.currentSongAdjustments) > 2
+                    and absAdjustBy > slave.currentSongAdjustments.range)):
                 # BUG: This doesn't seem to work: sometimes it allows
                 # very large adjustments and turns into a broken
                 # record D:
