@@ -276,17 +276,17 @@ class Client(mpd.MPDClient):
             # Calculate adjustment
             if self.latency is not None:
                 # Use user-set adjustment
-                adjustBy = self.latency
+                offset = self.latency
             elif self.initialPlayTimes.average:
                 self.log.debug("Adjusting by average initial play time")
 
-                adjustBy = self.initialPlayTimes.average
+                offset = self.initialPlayTimes.average
             else:
                 self.log.debug("Adjusting by average ping")
 
-                adjustBy = self.pings.average
+                offset = self.pings.average
 
-            self.log.debug('Adjusting initial play by %s seconds', adjustBy)
+            self.log.debug('Adjusting initial play by %s seconds', offset)
 
             # Update status (not sure if this is still necessary, but
             # it might help avoid race conditions or something)
@@ -309,7 +309,7 @@ class Client(mpd.MPDClient):
             # positive adjustment?  There seem to be some tracks that
             # require negative adjustments, but I don't know if that
             # would be the case when playing from a stop
-            if adjustBy > 0:
+            if offset > 0:
                 tries = 0
 
                 # Wait for the server to...catch up?  I don't remember
@@ -323,7 +323,7 @@ class Client(mpd.MPDClient):
                     tries += 1
 
                 # Seek to the adjusted playing position
-                self.seek(self.song, self.elapsed + adjustBy)
+                self.seek(self.song, self.elapsed + offset)
 
             # Issue the play command
             super(Client, self).play()
