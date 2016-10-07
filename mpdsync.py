@@ -1143,6 +1143,9 @@ class Seeker(Master):
             absAdjustBy = abs(adjustBy)
             if ((slave.duration and absAdjustBy > slave.duration * 0.01)
                 or absAdjustBy > 1):
+                # BUG: This doesn't seem to work: sometimes it allows
+                # very large adjustments and turns into a broken
+                # record D:
                 self.log.debug('Adjustment to %s too large:%s  Adjusting by average ping:%s',
                                slave.host, adjustBy, slave.pings.average)
 
