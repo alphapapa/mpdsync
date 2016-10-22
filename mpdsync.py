@@ -820,6 +820,8 @@ class Master(Client):
                 self.log.exception("Unable to syncPlayer for slave %s.  Tries:%s  Error:%s",
                                    slave.host, tries, e)
                 tries += 1
+
+                return False
             else:
                 # Sync succeeded
                 return True
