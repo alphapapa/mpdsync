@@ -770,9 +770,9 @@ class Master(Client):
 
                     # Don't re-sync if the slave is already playing
                     # the same song at the right place
-                    if (slave.playing and
-                        slave.song == self.song and
-                        self._compareElapsed(self, slave) < 1):
+                    if (slave.playing
+                        and slave.song == self.song
+                        and self._compareElapsed(self, slave) < 1):
 
                         self.log.debug('Slave %s and master already playing same song, less than 1 second apart',
                                        slave.host)
