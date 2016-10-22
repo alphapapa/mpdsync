@@ -77,7 +77,8 @@ class AveragedList(list):
         self.max = 0
         self.min = 0
         self.range = 0
-        self.average = 0
+        self.average = 0  # actually the moving average; not renaming right now...
+        self.overall_average = 0
         self.printDebug = printDebug
 
         # TODO: Isn't there a more Pythonic way to do this?
@@ -88,8 +89,8 @@ class AveragedList(list):
             super(AveragedList, self).__init__()
 
     def __str__(self):
-        return 'name:%s average:%s range:%s max:%s min:%s' % (
-            self.name, self.average, self.range, self.max, self.min)
+        return 'name:%s length:%s overall-average:%s moving-average:%s range:%s max:%s min:%s' % (
+            self.name, len(self), self.overall_average, self.average, self.range, self.max, self.min)
 
     __repr__ = __str__
 
@@ -113,15 +114,27 @@ class AveragedList(list):
         args = [MyFloat(a) for a in args]
         super(AveragedList, self).insert(pos, *args)
 
-        while len(self) > self.length:
+        # Remove elements if length is limited
+        while (self.length
+               and len(self) > self.length):
             self.pop()
         self._updateStats()
 
     def _updateStats(self):
-        self.average = MyFloat(sum(self) / len(self))
+        # Actually the moving average.  Taking the first 10 elements
+        # since I usually insert rather than append (not sure why,
+        # though; maybe I should change that)
+        self.average = MyFloat(sum(self[:10]) / (10 if len(self) >= 10
+                                                  else len(self)))
+
+        self.overall_average = MyFloat(sum(self) / len(self))
         self.max = MyFloat(max(self))
         self.min = MyFloat(min(self))
-        self.range = MyFloat(self.max - self.min)
+        self.overall_range = MyFloat(self.max - self.min)
+
+        # "Moving range" of first 10 elements (necessary for properly
+        # setting the max difference)
+        self.range = MyFloat(max(self[:10]) - min(self[:10]))
 
         if self.printDebug:
             self.log.debug(self)
@@ -173,7 +186,7 @@ class Client(mpd.MPDClient):
         self.currentSongShouldSeek = True
         self.currentSongAdjustments = 0
         self.currentSongDifferences = AveragedList(
-            name='currentSongDifferences', length=10)
+            name='currentSongDifferences')
 
         self.pings = AveragedList(name='%s.pings' % self.host, length=10)
         self.adjustments = AveragedList(name='%sadjustments' % self.host,
@@ -192,6 +205,9 @@ class Client(mpd.MPDClient):
         # filename), and print on exit.  This way I can play a short
         # playlist in a loop and see if there is a pattern with
         # certain songs being consistently bad at syncing and seeking.
+        self.song_adjustments = []
+
+        self.song_differences = []
 
     def ping(self):
         '''Pings the daemon and records how long it took.'''
@@ -503,10 +519,9 @@ class Master(Client):
             # TODO: Put this in a function?
             slave.currentSongShouldSeek = True
             slave.numCurrentSongAdjustments = 0
-            slave.currentSongAdjustments = AveragedList(
-                name='%s.currentSongAdjustments' % slave.host, length=10, printDebug=True)
-            slave.currentSongDifferences = AveragedList(
-                name='%s.currentSongDifferences' % slave.host, length=10)
+            slave.currentSongAdjustments = AveragedList(name='%s.currentSongAdjustments' % slave.host,
+                                                        length=10, printDebug=True)
+            slave.currentSongDifferences = AveragedList(name='%s.currentSongDifferences' % slave.host)
             slave.lastSong = slave.song
 
         if slave.elapsed:
@@ -918,9 +933,11 @@ class Seeker(Master):
             # syncs.  This may not be necessary with adding half the
             # average a few lines up, but it may be a good extra
             # precaution.
-            minimumMaxDifference = (max([abs(slave.currentSongDifferences.max),
-                                         abs(slave.currentSongDifferences.min)])
-                                    * 0.5)
+
+            # Use the max and min of the last 10 measurements
+            minimumMaxDifference = (0.5 * max([abs(max(slave.currentSongDifferences[:10])),
+                                               abs(min(slave.currentSongDifferences[:10]))]))
+
             if maxDifference < minimumMaxDifference:
                 self.log.debug('maxDifference too small (%s); setting maxDifference to '
                                'half of the biggest difference', maxDifference)
