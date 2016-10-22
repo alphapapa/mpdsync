@@ -944,9 +944,9 @@ class Seeker(Master):
             # average a few lines up, but it may be a good extra
             # precaution.
 
-            # Use the max and min of the last 10 measurements
-            minimumMaxDifference = (0.5 * max([abs(max(slave.currentSongDifferences[:10])),
-                                               abs(min(slave.currentSongDifferences[:10]))]))
+            # Use the max and min of the last 10 measurements, but not less than 30ms
+            minimumMaxDifference = max(0.03, (0.5 * max([abs(max(slave.currentSongDifferences[:10])),
+                                                        abs(min(slave.currentSongDifferences[:10]))])))
 
             if maxDifference < minimumMaxDifference:
                 self.log.debug('maxDifference too small (%s); setting maxDifference to '
@@ -957,20 +957,19 @@ class Seeker(Master):
         elif slave.pings.average:
             # Use average ping
 
-            # Use the larger of master or slave ping so the script can run on either one
-            maxDifference = (max([slave.pings.average,
-                                 self.pings.average])
-                             * 30)
+            # Use the larger of master or slave ping so the script can
+            # run on either one, multiplied by 30 (e.g. a 2 ms LAN
+            # ping becomes 60 ms max difference), but not less than 30ms
+            maxDifference = max(0.03, (30 * max([slave.pings.average, self.pings.average])))
 
-            # But don't go over 100 ms; if it's that high, better to
-            # just resync again
-            if maxDifference > 0.2:
-                # But this does not work well for remote files.  The
-                # difference sometimes never gets lower than the
-                # maxDifference, so it resyncs forever, and always by
-                # the average ping or average slave adjustment, which
-                # basically loops doing the same syncs forever.  Sigh.
-                maxDifference = 0.2
+            # But don't go over 200 ms; if it's that high, better to
+            # just resync again.  But this does not work well for
+            # remote files.  The difference sometimes never gets lower
+            # than the maxDifference, so it resyncs forever, and
+            # always by the average ping or average slave adjustment,
+            # which basically loops doing the same syncs forever.
+            # Sigh.
+            maxDifference = min(0.2, maxDifference)
 
         else:
             # This shouldn't happen, but if it does, use 0.2 until we
