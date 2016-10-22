@@ -764,6 +764,10 @@ class Master(Client):
                 # Sync player status
                 if self.playing:
 
+                    # Verify playlist is set.  Sometimes this can get emptied somehow, when connections drop...
+                    if not slave.playlist:
+                        self.syncPlaylists()
+
                     # Don't re-sync if the slave is already playing
                     # the same song at the right place
                     if (slave.playing and
