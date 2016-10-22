@@ -976,10 +976,9 @@ class Seeker(Master):
             self.log.debug('Average song difference (%s) > maxDifference (%s)',
                            absAverage, maxDifference)
 
-            # Don't reseek if the current difference is
-            # both less than the average difference and
-            # within 50% of it; hopefully this will help
-            # avoid excessive reseeking
+            # Don't reseek if the current difference is both less than
+            # the average difference and within 50% of it; hopefully
+            # this will help avoid excessive reseeking
             absCurrentDifference = abs(slave.currentSongDifferences[0])
             if (absCurrentDifference < absAverage
                 and (min(absCurrentDifference, absAverage) / max(absCurrentDifference, absAverage)) < 0.5):
