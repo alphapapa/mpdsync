@@ -1183,9 +1183,9 @@ class Seeker(Master):
 
                 adjustBy = slave.pings.average
 
-                self.log.debug("Resetting current song adjustments")
+                self.log.debug("Resetting current song differences")
 
-                slave.currentSongAdjustments.clear()
+                slave.currentSongDifferences.clear()
 
             # Not sure if I should update the master's position
             # again; that might require redoing the calculations.
