@@ -524,6 +524,12 @@ class Master(Client):
             slave.currentSongDifferences = AveragedList(name='%s.currentSongDifferences' % slave.host)
             slave.lastSong = slave.song
 
+            # Record song differences and adjustments for later debugging
+            slave.song_adjustments.append({'file': slave.playlist[int(slave.song)],
+                                           'adjustments': slave.currentSongAdjustments})
+            slave.song_differences.append({'file': slave.playlist[int(slave.song)],
+                                           'differences': slave.currentSongDifferences})
+
         if slave.elapsed:
 
             # Seems like it would make sense to add the
@@ -1355,6 +1361,14 @@ def main():
         log.debug("Interrupted.  Filetype adjustments for slave 0: %s",
                   [{a: master.slaves[0].fileTypeAdjustments[a]}
                    for a in master.slaves[0].fileTypeAdjustments])
+        log.debug("Song adjustments for slave 0: %s",
+                  "\n".join([str(a)
+                             for a in sorted(master.slaves[0].song_adjustments,
+                                             key=lambda i: len(i['adjustments']))]))
+        log.debug("Song differences for slave 0: %s",
+                  "\n".join([str(a)
+                             for a in sorted(master.slaves[0].song_differences,
+                                             key=lambda i: i['differences'].overall_average)]))
 
 if __name__ == '__main__':
     sys.exit(main())
