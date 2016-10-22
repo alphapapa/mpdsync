@@ -1158,9 +1158,14 @@ class Seeker(Master):
 
                 adjustBy = slave.pings.average
 
-            #  Not sure if I should update the master's position
-            #  again; that might require redoing the calculations.
-            #  Commenting out for now: self.status()
+                self.log.debug("Resetting current song adjustments")
+
+                slave.currentSongAdjustments.clear()
+
+            # Not sure if I should update the master's position
+            # again; that might require redoing the calculations.
+            # Commenting out for now.
+            # self.status()
 
         # Calculate position
         position = self.elapsed - adjustBy
