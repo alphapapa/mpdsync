@@ -476,7 +476,7 @@ class Master(Client):
         self.slaveDifferences = AveragedList(name='slaveDifferences', length=10)
         self.elapsedLoopRunning = False
 
-    def _compareElapsed(self, master, slave):
+    def _current_difference(self, slave):
         '''Compares the master's and the slave's playing position and sets
         their attributes accordingly, then returns the difference.'''
 
@@ -492,16 +492,16 @@ class Master(Client):
         # this somehow.  Sigh.
 
         # Check pings
-        master.ping()
+        self.ping()
         slave.ping()
-        masterPing = master.pings[0]
+        masterPing = self.pings[0]
         slavePing = slave.pings[0]
         ping = abs(masterPing - slavePing)
 
         self.log.debug("Last ping time for slave %s: %s", slave.host, ping)
 
         # Get master status and time how long it takes
-        masterStatusLatency = MyFloat(timeFunction(master.status))
+        masterStatusLatency = MyFloat(timeFunction(self.status))
 
         self.log.debug("masterStatusLatency:%s", masterStatusLatency)
 
@@ -535,7 +535,7 @@ class Master(Client):
             # Seems like it would make sense to add the
             # masterStatusLatency, but I seem to be observing that the
             # opposite is the case...
-            difference = master.elapsed - (slave.elapsed + slaveStatusLatency)
+            difference = self.elapsed - (slave.elapsed + slaveStatusLatency)
 
             # Record the difference
             slave.currentSongDifferences.insert(0, difference)
@@ -543,7 +543,7 @@ class Master(Client):
             # "Difference" is approximately aligned with the average
             # below in the debug output
             self.log.debug('Master/%s elapsed:%s/%s  Difference:%s',
-                      slave.host, master.elapsed, slave.elapsed, difference)
+                      slave.host, self.elapsed, slave.elapsed, difference)
             self.log.debug(slave.currentSongDifferences)
             self.log.debug(slave.currentSongAdjustments)
 
@@ -772,7 +772,7 @@ class Master(Client):
                     # the same song at the right place
                     if (slave.playing
                         and slave.song == self.song
-                        and self._compareElapsed(self, slave) < 1):
+                        and self._current_difference(slave) < 1):
 
                         self.log.debug('Slave %s and master already playing same song, less than 1 second apart',
                                        slave.host)
@@ -786,16 +786,18 @@ class Master(Client):
                             slave.seek(self.song, self.elapsed)
                         except Exception as e:
                             self.log.exception("Couldn't seek slave %s:", slave.host, e)
+
                             return False
 
                         # Play it
                         if not slave.play(initial=True):
                             self.log.critical("Couldn't play slave: %s", slave.host)
+
                             return False
 
                         # Wait a moment and then check the difference
                         time.sleep(0.2)
-                        playLatency = self._compareElapsed(self, slave)
+                        playLatency = self._current_difference(slave)
 
                         if not playLatency:
                             # This probably means the slave isn't playing at all for some reason
@@ -832,7 +834,7 @@ class Master(Client):
         # Make new connection to master server that won't idle()
         self.seeker = Seeker(self)
         self.seeker.connect()
-        self.seeker.startLoop()
+        self.seeker.start_loop()
 
 
 class Seeker(Master):
@@ -848,7 +850,7 @@ class Seeker(Master):
         self.master = master
         self.slaves = master.slaves
 
-    def startLoop(self):
+    def start_loop(self):
         self.thread = Thread(target=self._syncLoop)
         self.thread.daemon = True
         self.thread.start()
@@ -878,7 +880,8 @@ class Seeker(Master):
                     # TODO: If finished seeking, stop the loop until
                     # the next track (and restart it on track change)
 
-                    self._seekIfNecessary(slave)
+                    if self._reseek_necessary(slave):
+                        self._reseek_player(slave)
 
                     # Unlock the slave
                     slave.syncLoopLocked = False
@@ -908,140 +911,7 @@ class Seeker(Master):
 
             time.sleep(sleepTime)
 
-    def _seekIfNecessary(self, slave):
-        '''Reseeks the slave if necessary.'''
-
-        # Compare the master and slave's elapsed time
-        self._compareElapsed(self, slave)
-
-        # Don't seek if we're finished seeking this song
-        if not slave.currentSongShouldSeek:
-            self.log.debug('Not seeking this song anymore')
-
-            return
-
-        # Calculate maxDifference
-        if len(slave.currentSongDifferences) >= 5:
-            # At least 5 measurements for current
-            # song
-
-            if len(slave.currentSongDifferences) >= 10:
-                # 10 or more measurements; use one-quarter of the
-                # range
-                maxDifference = slave.currentSongDifferences.range / 4
-
-                # Add half the average to prevent it from being too
-                # small and causing excessive reseeks.  For some songs
-                # the range can be very small, like 38ms, but for
-                # others it can be consistently 100-200 ms.
-                maxDifference += (abs(slave.currentSongDifferences.average) / 2)
-            else:
-                # 5-9 measurements; use one-half of the
-                # range
-                maxDifference = slave.currentSongDifferences.range / 2
-
-            # Use at least half of the biggest difference to prevent
-            # the occasional small range from causing unnecessary
-            # syncs.  This may not be necessary with adding half the
-            # average a few lines up, but it may be a good extra
-            # precaution.
-
-            # Use the max and min of the last 10 measurements, but not less than 30ms
-            minimumMaxDifference = max(0.03, (0.5 * max([abs(max(slave.currentSongDifferences[:10])),
-                                                        abs(min(slave.currentSongDifferences[:10]))])))
-
-            if maxDifference < minimumMaxDifference:
-                self.log.debug('maxDifference too small (%s); setting maxDifference to '
-                               'half of the biggest difference', maxDifference)
-
-                maxDifference = minimumMaxDifference
-
-        elif slave.pings.average:
-            # Use average ping
-
-            # Use the larger of master or slave ping so the script can
-            # run on either one, multiplied by 30 (e.g. a 2 ms LAN
-            # ping becomes 60 ms max difference), but not less than 30ms
-            maxDifference = max(0.03, (30 * max([slave.pings.average, self.pings.average])))
-
-            # But don't go over 200 ms; if it's that high, better to
-            # just resync again.  But this does not work well for
-            # remote files.  The difference sometimes never gets lower
-            # than the maxDifference, so it resyncs forever, and
-            # always by the average ping or average slave adjustment,
-            # which basically loops doing the same syncs forever.
-            # Sigh.
-            maxDifference = min(0.2, maxDifference)
-
-        else:
-            # This shouldn't happen, but if it does, use 0.2 until we
-            # have something better.  0.2 seems like a lot, and for
-            # local files it is, but remote files don't seek as
-            # quickly or consistently, so 0.1 can cause excessive
-            # reseeking in a short period of time
-            maxDifference = 0.2
-
-        self.log.debug("maxDifference for slave %s: %s",
-                           slave.host, maxDifference)
-
-        # If the average difference is less than 30ms, and the range
-        # is less than 300ms, and there are enough measurements, stop
-        # seeking until the next song.  Do this down here so we can
-        # still watch measurements.
-        if (len(slave.currentSongDifferences) >= 10
-            and slave.currentSongDifferences.range <= 0.300
-            and abs(slave.currentSongDifferences.average) < 0.030):
-
-            self.log.debug('Average difference below 30ms; not seeking this song anymore')
-
-            slave.currentSongShouldSeek = False
-
-            return
-
-        # Adjust if difference is too big
-        absAverage = abs(slave.currentSongDifferences.average)
-        if absAverage > maxDifference:
-            self.log.debug('Average song difference (%s) > maxDifference (%s)',
-                           absAverage, maxDifference)
-
-            # Don't reseek if the current difference is both less than
-            # the average difference and within 50% of it; hopefully
-            # this will help avoid excessive reseeking
-            absCurrentDifference = abs(slave.currentSongDifferences[0])
-            if (absCurrentDifference < absAverage
-                and (min(absCurrentDifference, absAverage) / max(absCurrentDifference, absAverage)) < 0.5):
-
-                self.log.debug('Current difference (%s) < average difference (%s); not reseeking',
-                               absCurrentDifference, absAverage)
-
-            else:
-                # Do the reseek
-                self.log.info('Resyncing player to minimize difference for slave %s',
-                              slave.host)
-
-                try:
-                    # Do the actual seek
-                    if self._reSeekPlayer(slave):
-                        slave.reSeekedTimes += 1
-                    else:
-                        self.log.debug('Slave %s not resynced', slave.host)
-
-                    # Give it a moment to settle before looping again
-                    time.sleep(1)
-
-                    self.log.debug("Client %s now reseeked %s times", slave.host, slave.reSeekedTimes)
-
-                except Exception as e:
-                    # Seek failed...sigh...
-                    self.log.exception("%s: %s", type(e), e)
-
-                    # Try to reconnect if necessary
-                    try:
-                        slave.checkConnection()
-                    except:
-                        self.log.exception("Couldn't reconnect to slave %s", slave.host)
-
-    def _reSeekPlayer(self, slave):
+    def _reseek_player(self, slave):
         '''Seeks the slave to the master's playing position.'''
 
         # TODO: Idea: Maybe part of the problem is that MPD can't seek
@@ -1052,11 +922,63 @@ class Seeker(Master):
         # or twice, instead of the slaves trying repeatedly to get a
         # good sync.
 
-        # Update master info
-        self.status()
+        adjustBy = self._calc_adjustment(slave)
 
-        # Reconnect if connection dropped
-        slave.checkConnection()
+        # Calculate position
+        position = self.elapsed - adjustBy
+        if position < 0:
+            self.log.debug("Position for %s was < 0 (%s); skipping adjustment",
+                           slave.host, position)
+
+            return False
+
+        self.log.debug('Master elapsed:%s  Adjusting %s to:%s (song: %s)',
+                       self.elapsed, slave.host, position, self.song)
+
+        # For some reason this is getting weird errors like
+        # "mpd.ProtocolError: Got unexpected return value: 'volume:
+        # 0'", and I don't want the script to quit, so wrapping it in
+        # a try/except should help it try again
+        try:
+            # Try to seek to current playing position, adjusted for
+            # latency
+            slave.seek(self.song, position)
+
+        except Exception as e:
+            # Seek failed
+            self.log.exception("Unable to seek slave %s: %s", slave.host, e)
+
+            # Try to completely resync the slave
+            slave.playlistVersion = None
+            self.syncPlaylists()
+
+            # Clear song adjustments to prevent wild jittering after
+            # seek timeouts
+            slave.numCurrentSongAdjustments = 0
+            slave.checkConnection()
+
+            return False
+
+        else:
+            # Seek succeeded
+            slave.numCurrentSongAdjustments += 1
+
+            # Don't record adjustment if it's just the average ping
+            if adjustBy != slave.pings.average:
+                # It wasn't; record it
+                slave.adjustments.insert(0, adjustBy)
+                slave.currentSongAdjustments.append(adjustBy)
+                slave.fileTypeAdjustments[slave.currentSongFiletype].append(adjustBy)
+
+            # Reset song differences (maybe this or just cutting it in
+            # half will help prevent too many consecutive adjustments
+            while len(slave.currentSongDifferences) > 5:
+                slave.currentSongDifferences.pop()
+
+            return True
+
+    def _calc_adjustment(self, slave):
+        "Return adjustment to make to sync slave with master."
 
         # Choose adjustment
         if slave.latency is not None:
@@ -1197,59 +1119,99 @@ class Seeker(Master):
             # Commenting out for now.
             # self.status()
 
-        # Calculate position
-        position = self.elapsed - adjustBy
-        if position < 0:
-            self.log.debug("Position for %s was < 0 (%s); skipping adjustment",
-                           slave.host, position)
+        return adjustBy
+
+    def _reseek_necessary(self, slave):
+        "Return True if reseek is necessary."
+
+        # Update master info
+        self.status()
+
+        # Reconnect if connection dropped
+        slave.checkConnection()
+
+        # Don't seek if we're finished seeking this song
+        if not slave.currentSongShouldSeek:
+            self.log.debug('Not seeking this song anymore')
 
             return False
 
-        self.log.debug('Master elapsed:%s  Adjusting %s to:%s (song: %s)',
-                       self.elapsed, slave.host, position, self.song)
+        current_difference = self._current_difference(slave)
+        max_difference = self._max_difference(slave)
 
-        # For some reason this is getting weird errors like
-        # "mpd.ProtocolError: Got unexpected return value: 'volume:
-        # 0'", and I don't want the script to quit, so wrapping it in
-        # a try/except should help it try again
-        try:
-            # Try to seek to current playing position, adjusted for
-            # latency
-            slave.seek(self.song, position)
-
-        except Exception as e:
-            # Seek failed
-            self.log.exception("Unable to seek slave %s: %s", slave.host, e)
-
-            # Try to completely resync the slave
-            slave.playlistVersion = None
-            self.syncPlaylists()
-
-            # Clear song adjustments to prevent wild jittering after
-            # seek timeouts
-            slave.numCurrentSongAdjustments = 0
-            slave.checkConnection()
-
+        if current_difference > max_difference:
+            return True
+        else:
             return False
+
+    def _max_difference(self, slave):
+        "Return max difference between slave and master."
+
+        # Calculate maxDifference
+        if len(slave.currentSongDifferences) >= 5:
+            # At least 5 measurements for current
+            # song
+
+            if len(slave.currentSongDifferences) >= 10:
+                # 10 or more measurements; use one-quarter of the
+                # range
+                maxDifference = slave.currentSongDifferences.range / 4
+
+                # Add half the average to prevent it from being too
+                # small and causing excessive reseeks.  For some songs
+                # the range can be very small, like 38ms, but for
+                # others it can be consistently 100-200 ms.
+                maxDifference += (abs(slave.currentSongDifferences.average) / 2)
+            else:
+                # 5-9 measurements; use one-half of the
+                # range
+                maxDifference = slave.currentSongDifferences.range / 2
+
+            # Use at least half of the biggest difference to prevent
+            # the occasional small range from causing unnecessary
+            # syncs.  This may not be necessary with adding half the
+            # average a few lines up, but it may be a good extra
+            # precaution.
+
+            # Use the max and min of the last 10 measurements, but not less than 30ms
+            minimumMaxDifference = max(0.03, (0.5 * max([abs(max(slave.currentSongDifferences[:10])),
+                                                        abs(min(slave.currentSongDifferences[:10]))])))
+
+            if maxDifference < minimumMaxDifference:
+                self.log.debug('maxDifference too small (%s); setting maxDifference to '
+                               'half of the biggest difference', maxDifference)
+
+                maxDifference = minimumMaxDifference
+
+        elif slave.pings.average:
+            # Use average ping
+
+            # Use the larger of master or slave ping so the script can
+            # run on either one, multiplied by 30 (e.g. a 2 ms LAN
+            # ping becomes 60 ms max difference), but not less than 30ms
+            maxDifference = max(0.03, (30 * max([slave.pings.average, self.pings.average])))
+
+            # But don't go over 200 ms; if it's that high, better to
+            # just resync again.  But this does not work well for
+            # remote files.  The difference sometimes never gets lower
+            # than the maxDifference, so it resyncs forever, and
+            # always by the average ping or average slave adjustment,
+            # which basically loops doing the same syncs forever.
+            # Sigh.
+            maxDifference = min(0.2, maxDifference)
 
         else:
-            # Seek succeeded
-            slave.numCurrentSongAdjustments += 1
+            # This shouldn't happen, but if it does, use 0.2 until we
+            # have something better.  0.2 seems like a lot, and for
+            # local files it is, but remote files don't seek as
+            # quickly or consistently, so 0.1 can cause excessive
+            # reseeking in a short period of time
+            maxDifference = 0.2
 
-            # Don't record adjustment if it's just the average ping
-            if adjustBy != slave.pings.average:
-                # It wasn't; record it
-                slave.adjustments.insert(0, adjustBy)
-                slave.currentSongAdjustments.append(adjustBy)
-                slave.fileTypeAdjustments[slave.currentSongFiletype].append(adjustBy)
+        self.log.debug("maxDifference for slave %s: %s",
+                           slave.host, maxDifference)
 
-            # Reset song differences (maybe this or just cutting it in
-            # half will help prevent too many consecutive adjustments
-            while len(slave.currentSongDifferences) > 5:
-                slave.currentSongDifferences.pop()
-
-            return True
-
+        return maxDifference
 
 # ** Functions
 def timeFunction(f):
