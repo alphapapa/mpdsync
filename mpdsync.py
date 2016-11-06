@@ -1116,7 +1116,7 @@ class Seeker(Master):
                     # resyncs based on ping...which may mess up a
                     # well-synced song.  :(
 
-                    if slave.numCurrentSongAdjustments > 10:
+                    if slave.numCurrentSongAdjustments > 5:
                         # Too many adjustments for this song.  Try average
                         # ping to settle back down.  Some songs just don't
                         # seek reliably or something.
