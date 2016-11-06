@@ -44,7 +44,9 @@ So if your master server were on the local machine, and you wanted to also play 
 
 =mpdsync.py -m localhost -s kitchen basement=
 
-You can also use IP addresses instead of hostnames.
+Or if your master server were in the living room, and occasionally you wanted to sync your bedroom's MPD instance with it, you could run this from the bedroom machine:
+
+=mpdsync.py -m livingroom -s localhost=
 
 ** Development
 
