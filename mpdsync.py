@@ -897,6 +897,11 @@ class Seeker(Master):
 
     def start_loop(self):
         self.sync = True
+
+        # Remove any stale locks
+        for slave in self.slaves:
+            slave.syncLoopLocked = False
+
         self.thread = Thread(target=self._syncLoop)
         self.thread.daemon = True
         self.thread.start()
