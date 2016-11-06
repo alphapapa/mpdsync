@@ -55,10 +55,10 @@ Contributions are welcome!
 *** TODOs
 
 + Sync player settings (e.g. shuffle, repeat).  Simple, just haven't bothered yet.  Although some of these should probably /not/ be synced, because the master should control which tracks play, etc.
-+ Due to timing issues with a network and MPD's idle command, the music isn't perfectly synced. Hopefully this can be fixed without forking MPD.  It may be possible to use some simple calculations based on ping times to get close enough. For some interesting reading, see:
++ Due to network latency and and MPD's idle command, playback can't be perfectly synced.  We try to workaround this by adjusting for latency (the =-l= option), but it's not perfect.  It probably cannot be completely fixed without implementing it in MPD itself.  For some interesting reading, see:
     - https://snarfed.org/synchronizing_mp3_playback
     - https://github.com/snarfed/p4sync
-+ Adjusting the volume on the master ought to proportionally adjust the volume on all of the slaves
++ It might be handy for adjusting the volume on the master to (optionally) proportionally adjust the volume on all of the slaves.
 
 ** Credits
 
