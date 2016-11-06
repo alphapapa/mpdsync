@@ -962,6 +962,10 @@ class Seeker(Master):
                 if sleepTime < 0.5:
                     sleepTime = 0.5
 
+                # Sleep for 2 seconds if adjustment was very small (i.e. by ping)
+                if len(slave.currentSongAdjustments) > 0 and slave.currentSongAdjustments[0] < 0.050:
+                    sleepTime = 2
+
                 # Print comparison between two slaves
                 if len(self.slaves) > 1:
                     self.slaveDifferences.insert(0, abs(self.slaves[0].currentSongDifferences.average
