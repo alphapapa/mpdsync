@@ -54,7 +54,7 @@ Contributions are welcome!
                         
 *** TODOs
 
-+ Sync player settings (e.g. shuffle, repeat).  Simple, just haven't bothered yet...
++ Sync player settings (e.g. shuffle, repeat).  Simple, just haven't bothered yet.  Although some of these should probably /not/ be synced, because the master should control which tracks play, etc.
 + Due to timing issues with a network and MPD's idle command, the music isn't perfectly synced. Hopefully this can be fixed without forking MPD.  It may be possible to use some simple calculations based on ping times to get close enough. For some interesting reading, see:
     - https://snarfed.org/synchronizing_mp3_playback
     - https://github.com/snarfed/p4sync
