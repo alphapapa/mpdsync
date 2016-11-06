@@ -1279,6 +1279,8 @@ class Seeker(Master):
             # reseeking in a short period of time
             maxDifference = 0.2
 
+        maxDifference = round(maxDifference, 3)
+
         self.log.debug("maxDifference for slave %s: %s",
                            slave.host, maxDifference)
 
