@@ -267,6 +267,14 @@ class Client(mpd.MPDClient):
         self.testPing()
 
         self.log.debug("Connected.")
+
+    def disconnect(self):
+        "Disconnect from MPD."
+
+        super(Client, self).disconnect()
+
+        self.log.debug("Disconnected.")
+
     def getPlaylist(self):
         '''Gets the playlist from the daemon.'''
 
