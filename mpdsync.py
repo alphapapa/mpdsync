@@ -487,6 +487,8 @@ class Master(Client):
         self.slaveDifferences = AveragedList(name='slaveDifferences', length=10)
         self.elapsedLoopRunning = False
 
+        self.seeker = None
+
     def _current_difference(self, slave):
         '''Compares the master's and the slave's playing position and sets
         their attributes accordingly, then returns the difference.'''
@@ -596,12 +598,6 @@ class Master(Client):
         self.syncPlaylists()
         self.syncOptions()
         self.syncPlayers()
-
-        # Run the sync thread
-        if self.adjustLatency:
-            self.log.debug('Starting seeker')
-
-            self.startSeeker()
 
     def syncPlaylists(self):
         '''Syncs all slaves' playlists.'''
@@ -755,6 +751,15 @@ class Master(Client):
         for slave in self.slaves:
             self.syncPlayer(slave)
 
+        # Restart sync thread if necessary
+        if self.adjustLatency:
+            if self.playing:
+                self.checkSeeker()
+            else:
+                if not self.paused:
+                    # Stopped
+                    self.stopSeeker()
+
     def syncPlayer(self, slave):
         '''Sync's a slave's player status.'''
 
@@ -847,10 +852,38 @@ class Master(Client):
         self.seeker.connect()
         self.seeker.start_loop()
 
+    def checkSeeker(self):
+        "Restart seeker thread if necessary."
+
+        if self.seeker:
+            self.seeker.check_loop()
+        else:
+            self.startSeeker()
+
+    def stopSeeker(self):
+        "Stop sync loop thread, disconnect seeker connection, and cleanup Seeker instance."
+
+        if self.seeker:
+            # Stop thread
+            self.seeker.sync = False
+            while self.seeker.thread.is_alive():
+                self.log.debug("Waiting for seeker thread to stop...")
+                time.sleep(0.1)
+
+            self.log.debug("Seeker thread stopped.")
+
+            # Disconnect and cleanup object
+            self.seeker.disconnect()
+            self.seeker = None
+
 
 class Seeker(Master):
     '''Used to make a second connection to the master server that doesn't
     idle, which can be used to re-seek slaves' playing positions.'''
+
+    # TODO: It would seem like a good idea to avoid doing some things
+    # in this instance, like syncing the playlist, since that's not
+    # relevant to the seeker and takes some time.
 
     def __init__(self, master):
         super(Seeker, self).__init__(master.host, logger=master.log)
@@ -860,17 +893,39 @@ class Seeker(Master):
         # other instance
         self.master = master
         self.slaves = master.slaves
+        self.sync = False
 
     def start_loop(self):
+        self.sync = True
         self.thread = Thread(target=self._syncLoop)
         self.thread.daemon = True
         self.thread.start()
+
+    def check_loop(self):
+        "Restart _syncLoop if necessary."
+
+        if self.sync and not self.thread.is_alive():
+            self.log.warning("Sync thread died; restarting...")
+
+            self.start_loop()
 
     def _syncLoop(self):
         '''Runs a loop trying to keep the slaves in sync with the master.'''
 
         # Run the loop
-        while True:
+        while self.sync:
+            # NOTE: This works, but the thread won't stop while it's
+            # sleeping, so it can take several seconds in the worst
+            # case for the thread to notice that it should stop.  This
+            # doesn't seem like a problem most of the time, unless the
+            # user stops MPD and then starts it playing again before
+            # this thread has terminated, in which case the slaves
+            # won't start playing again until the thread terminates
+            # and the script catches up with the subsystem updates.
+            # I'm not sure how to fix this short of switching to a
+            # subprocess, because killing threads is not supported,
+            # and any workarounds are necessarily ugly hacks which
+            # might have bad side effects.
 
             if self.master.playing:
 
