@@ -560,7 +560,7 @@ class Master(Client):
             self.log.debug(slave.currentSongDifferences)
             self.log.debug(slave.currentSongAdjustments)
 
-            return difference
+            return abs(slave.currentSongDifferences.average)
 
     def status(self):
         '''Gets the master's status and updates its playlistVersion
