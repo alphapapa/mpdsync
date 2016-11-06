@@ -14,8 +14,6 @@ One MPD server will be considered the master and all the others will be slaves. 
 
 Upon startup, =mpdsync= will propagate the playlist and player state from the master to all of the slaves. Then =mpdsync= waits for the master server to do something, such as modify the playlist, and then makes the same changes to the slaves.
 
-If you want to use the latency/position adjusting option, you should run =mpdsync= on the same machine as the MPD master.  Otherwise, it doesn't matter which machine you run =mpdsync= and the MPD master on. 
-
 ** Examples
 
 Usage is very simple:
