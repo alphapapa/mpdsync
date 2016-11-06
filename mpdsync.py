@@ -266,10 +266,13 @@ class Client(mpd.MPDClient):
 
         self.testPing()
 
+        self.log.debug("Connected.")
     def getPlaylist(self):
         '''Gets the playlist from the daemon.'''
 
         self.playlist = super(Client, self).playlist()
+
+        self.log.debug("Got playlist")
 
     def pause(self):
         '''Pauses the daemon and tracks the playing state.'''
