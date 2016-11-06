@@ -1214,7 +1214,10 @@ class Seeker(Master):
         current_difference = self._current_difference(slave)
         max_difference = self._max_difference(slave)
 
-        if current_difference > max_difference:
+        if (current_difference > max_difference
+            and abs(slave.currentSongDifferences[0]) > max_difference):
+            self.log.debug("Average difference (%s) > max difference (%s); reseeking..." % (current_difference, max_difference))
+
             return True
         else:
             return False
