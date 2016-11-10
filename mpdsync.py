@@ -538,7 +538,6 @@ class Master(Client):
 
             # TODO: Put this in a function?
             slave.currentSongShouldSeek = True
-            slave.numCurrentSongAdjustments = 0
             slave.currentSongAdjustments = AveragedList(name='%s.currentSongAdjustments' % slave.host,
                                                         length=10, printDebug=True)
             slave.currentSongDifferences = AveragedList(name='%s.currentSongDifferences' % slave.host)
@@ -1035,14 +1034,13 @@ class Seeker(Master):
 
             # Clear song adjustments to prevent wild jittering after
             # seek timeouts
-            slave.numCurrentSongAdjustments = 0
+            slave.currentSongAdjustments.clear()
             slave.checkConnection()
 
             return False
 
         else:
             # Seek succeeded
-            slave.numCurrentSongAdjustments += 1
 
             # Don't record adjustment if it's just the average ping
             if adjustBy != slave.pings.average:
@@ -1070,7 +1068,7 @@ class Seeker(Master):
         else:
             # Calculate adjustment automatically
 
-            if slave.numCurrentSongAdjustments < 1:
+            if len(slave.currentSongAdjustments) < 1:
                 # First adjustment for song
                 self.log.debug("First adjustment for song...")
 
