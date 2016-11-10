@@ -21,8 +21,15 @@ if mpd.VERSION < (0, 5, 4):
     sys.exit(1)
 
 # ** Constants
+
 DEFAULT_PORT = 6600
 FILE_PREFIX_RE = re.compile('^file: ')
+
+# Max number of adjustments to make before adjusting by ping again
+MAX_ADJUSTMENTS = 5
+
+# Max adjustment size in ms (larger than this will trigger an adjustment by ping)
+MAX_ADJUSTMENT = 0.300
 
 # ** Classes
 class MyFloat(float):
@@ -124,8 +131,8 @@ class AveragedList(list):
         # Actually the moving average.  Taking the first 10 elements
         # since I usually insert rather than append (not sure why,
         # though; maybe I should change that)
-        self.average = MyFloat(sum(self[:10]) / (10 if len(self) >= 10
-                                                  else len(self)))
+        to_average = self[:10]
+        self.average = MyFloat(sum(to_average) / len(to_average))
 
         self.overall_average = MyFloat(sum(self) / len(self))
         self.max = MyFloat(max(self))
@@ -912,6 +919,7 @@ class Seeker(Master):
         if self.sync and not self.thread.is_alive():
             self.log.warning("Sync thread died; restarting...")
 
+            self.checkConnection()
             self.start_loop()
 
     def _syncLoop(self):
@@ -919,6 +927,8 @@ class Seeker(Master):
 
         # Run the loop
         while self.sync:
+            sleepTime = None
+
             # NOTE: This works, but the thread won't stop while it's
             # sleeping, so it can take several seconds in the worst
             # case for the thread to notice that it should stop.  This
@@ -953,18 +963,16 @@ class Seeker(Master):
 
                     if self._reseek_necessary(slave):
                         self._reseek_player(slave)
+                        sleepTime = 2
 
                     # Unlock the slave
                     slave.syncLoopLocked = False
 
-                # Sleep for 400ms for each measurement, but at least 500ms
-                sleepTime = 0.4 * len(slave.currentSongDifferences)
-                if sleepTime < 0.5:
-                    sleepTime = 0.5
-
-                # Sleep for 2 seconds if adjustment was very small (i.e. by ping)
-                if len(slave.currentSongAdjustments) > 0 and slave.currentSongAdjustments[0] < 0.050:
-                    sleepTime = 2
+                # Sleep for 400ms for each measurement, but at least 2 s
+                if not sleepTime:
+                    sleepTime = 0.4 * len(slave.currentSongDifferences)
+                    if sleepTime < 2:
+                        sleepTime = 2
 
                 # Print comparison between two slaves
                 if len(self.slaves) > 1:
@@ -1047,8 +1055,7 @@ class Seeker(Master):
 
             # Reset song differences (maybe this or just cutting it in
             # half will help prevent too many consecutive adjustments
-            while len(slave.currentSongDifferences) > 5:
-                slave.currentSongDifferences.pop()
+            slave.currentSongDifferences.clear()
 
             return True
 
@@ -1067,14 +1074,7 @@ class Seeker(Master):
 
             if slave.numCurrentSongAdjustments < 1:
                 # First adjustment for song
-                self.log.debug("First adjustment for song on slave %s", slave.host)
-
-                # Wait until at least 2 measurements
-                if len(slave.currentSongDifferences) < 2:
-                    self.log.debug('Only %s measurements for current song; skipping adjustment',
-                                   len(slave.currentSongDifferences))
-
-                    return False
+                self.log.debug("First adjustment for song...")
 
                 if len(slave.adjustments) > 5:
                     # More than 5 total adjustments made to this
@@ -1091,73 +1091,28 @@ class Seeker(Master):
                     self.log.debug("Adjusting %s by average ping: %s", slave.host, adjustBy)
             else:
                 # Not the first adjustment for song
-                self.log.debug("Not first adjustment for song on slave %s", slave.host)
 
-                if len(slave.currentSongDifferences) < 3:
-                    # Not enough measurements for this song
-                    self.log.debug("Not enough measurements (%s) for song on slave %s; "
-                                   "adjusting by average ping",
-                                   len(slave.currentSongDifferences), slave.host)
+                if len(slave.currentSongAdjustments) > MAX_ADJUSTMENTS:
+                    # Too many adjustments; alternate between ping and average difference
+                    self.log.debug("Too many adjustments (%s > %s)", len(slave.currentSongAdjustments), MAX_ADJUSTMENTS)
 
-                    adjustBy = slave.pings.average
-
-                else:
-                    # Enough measurements for song
-                    self.log.debug("%s measurements for song on slave %s",
-                                   len(slave.currentSongDifferences), slave.host)
-
-                    # TODO: Record timestamp of each adjustment.  If
-                    # it's been a long time since the last adjustment,
-                    # it may be a case of the range suddenly dropping
-                    # when a measurement fell off the list, causing
-                    # the maxDifference to suddenly drop, causing
-                    # another sync.  But sometimes this causes an
-                    # unnecessary sync, and this leads to a cascade of
-                    # resyncs based on ping...which may mess up a
-                    # well-synced song.  :(
-
-                    if slave.numCurrentSongAdjustments > 5:
-                        # Too many adjustments for this song.  Try average
-                        # ping to settle back down.  Some songs just don't
-                        # seek reliably or something.
-                        self.log.debug("Too many adjustments (%s) for song on slave %s; "
-                                       "adjusting by average ping",
-                                       slave.numCurrentSongAdjustments, slave.host)
+                    if not even(len(slave.currentSongAdjustments)):
+                        # Adjust by ping
+                        self.log.debug("Adjusting by ping...")
 
                         adjustBy = slave.pings.average
-
-                        # Reduce numCurrentSongAdjustments to give it
-                        # a chance to use song adjustments again
-                        # instead of reusing average ping until the
-                        # song ends; but don't reset it completely,
-                        # because if using the average song adjustment
-                        # isn't working, it might be better to use the
-                        # ping sooner
-                        slave.numCurrentSongAdjustments = 5
-
                     else:
-                        # Just the right number of measurements for
-                        # this song.
+                        # Try adjusting by difference again
+                        self.log.debug("Trying to adjust by difference...")
 
-                        # (trying without this) Adjust by less than
-                        # the average difference to gradually hone in
-                        # on the right adjustment.  0.5 is ok for
-                        # local files, but too small for remote ones;
-                        # trying 0.75.  I think the result should NOT
-                        # be inverted, but I had it being inverted
-                        # before...and it seemed to work... or did it?
-                        # I'm beginning to wonder if seek-latency is
-                        # so wild that the best way to sync is to just
-                        # sync with no adjustment or ping-only
-                        # adjustment and redo it a few times until you
-                        # get lucky and the difference is small.
+                        adjustBy = slave.currentSongDifferences.average
 
-                        # Invert the difference to adjust in the
-                        # opposite direction of the difference.
-                        adjustBy = slave.currentSongDifferences.average * -1
+                else:
+                    # Adjust by average difference
+                    adjustBy = slave.currentSongDifferences.average
 
-                        self.log.debug("Adjusting %s by currentSongDifferences.average: %s",
-                                       slave.host, adjustBy)
+                    self.log.debug("Adjusting %s by average difference: %s",
+                                   slave.host, adjustBy)
 
             # TODO: If the difference is too great, it seems that the
             # slave MPD has hit a bug where it thinks that song
@@ -1165,34 +1120,21 @@ class Seeker(Master):
             # point.  Stopping the slave playback and re-playing the
             # track seems to fix it.
 
-            # Sometimes the adjustment goes haywire.  If it's greater
-            # than 1% of the song duration, or greater than 300 ms,
-            # or greater than the range of adjustments already made to
-            # this song, or there have been more than 5 adjustments,
-            # adjust by average ping
             absAdjustBy = abs(adjustBy)
-            if (absAdjustBy > 0.300
-                or len(slave.currentSongAdjustments) > 5
-                or (slave.duration
-                    and absAdjustBy > slave.duration * 0.01)
-                or (len(slave.currentSongAdjustments) > 2
-                    and absAdjustBy > slave.currentSongAdjustments.range)):
-                # BUG: This doesn't seem to work: sometimes it allows
-                # very large adjustments and turns into a broken
-                # record D:
-                self.log.debug('Adjustment to %s too large:%s  Adjusting by average ping:%s',
-                               slave.host, adjustBy, slave.pings.average)
+            if absAdjustBy > MAX_ADJUSTMENT:
+                # Adjustment too large; use ping
+                self.log.debug("Adjustment too large (%s > %s); adjusting by ping", absAdjustBy, MAX_ADJUSTMENT)
 
                 adjustBy = slave.pings.average
 
-                self.log.debug("Resetting current song differences")
+            if adjustBy == slave.pings.average:
+                # Adjusting by ping, clear differences
+                self.log.debug("Clearing differences")
 
                 slave.currentSongDifferences.clear()
-
-            # Not sure if I should update the master's position
-            # again; that might require redoing the calculations.
-            # Commenting out for now.
-            # self.status()
+            else:
+                # Invert final difference-based adjustment
+                adjustBy = adjustBy * -1
 
         return adjustBy
 
@@ -1205,7 +1147,6 @@ class Seeker(Master):
         # Reconnect if connection dropped
         slave.checkConnection()
 
-        # Don't seek if we're finished seeking this song
         if not slave.currentSongShouldSeek:
             self.log.debug('Not seeking this song anymore')
 
@@ -1214,12 +1155,20 @@ class Seeker(Master):
         current_difference = self._current_difference(slave)
         max_difference = self._max_difference(slave)
 
+        if len(slave.currentSongDifferences) < 3:
+            self.log.debug("Less than 3 measurements; not seeking")
+
+            return False
+
         if (current_difference > max_difference
             and abs(slave.currentSongDifferences[0]) > max_difference):
+            # Current and average difference too large; reseek
             self.log.debug("Average difference (%s) > max difference (%s); reseeking..." % (current_difference, max_difference))
 
             return True
         else:
+            self.log.debug("Average difference within acceptable range; not reseeking")
+
             return False
 
     def _max_difference(self, slave):
@@ -1294,6 +1243,10 @@ class Seeker(Master):
         return maxDifference
 
 # ** Functions
+
+def even(num):
+    return (num % 2) == 0
+
 def timeFunction(f):
     t1 = time.time()
     f()
