@@ -963,16 +963,14 @@ class Seeker(Master):
 
                     if self._reseek_necessary(slave):
                         self._reseek_player(slave)
-                        sleepTime = 2
+                        sleepTime = 2  # Sleep 2 seconds after reseeking
 
                     # Unlock the slave
                     slave.syncLoopLocked = False
 
                 # Sleep for 400ms for each measurement, but at least 2 s
                 if not sleepTime:
-                    sleepTime = 0.4 * len(slave.currentSongDifferences)
-                    if sleepTime < 2:
-                        sleepTime = 2
+                    sleepTime = max(2, 0.4 * len(slave.currentSongDifferences))
 
                 # Print comparison between two slaves
                 if len(self.slaves) > 1:
