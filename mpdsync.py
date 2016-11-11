@@ -1173,7 +1173,6 @@ class Seeker(Master):
     def _max_difference(self, slave):
         "Return max difference between slave and master."
 
-        # Calculate maxDifference
         if len(slave.currentSongDifferences) >= 5:
             # At least 5 measurements for current song
 
