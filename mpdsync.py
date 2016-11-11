@@ -1232,8 +1232,7 @@ class Seeker(Master):
 
         maxDifference = round(maxDifference, 3)
 
-        self.log.debug("maxDifference for slave %s: %s",
-                           slave.host, maxDifference)
+        self.log.debug("maxDifference for slave %s: %s", slave.host, maxDifference)
 
         return maxDifference
 
