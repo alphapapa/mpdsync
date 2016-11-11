@@ -191,7 +191,7 @@ class Client(mpd.MPDClient):
         self.playedSinceLastPlaylistUpdate = False
 
         self.currentSongShouldSeek = True
-        self.currentSongAdjustments = 0
+        self.currentSongAdjustments = None
         self.currentSongDifferences = AveragedList(
             name='currentSongDifferences')
 
