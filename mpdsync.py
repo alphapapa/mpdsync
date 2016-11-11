@@ -363,7 +363,12 @@ class Client(mpd.MPDClient):
             super(Client, self).play()
 
             # Execute command list
-            result = self.command_list_end()
+            try:
+                result = self.command_list_end()
+            except mpd.ProtocolError:
+                self.log.exception("Unable to play client: %s.  Trying to resync...", self.host)
+
+                return False
 
         else:
             # Slave is already playing current song
@@ -755,7 +760,12 @@ class Master(Client):
 
         # SOMEDAY: do this in parallel?
         for slave in self.slaves:
-            self.syncPlayer(slave)
+            if not self.syncPlayer(slave):
+                self.log.debug("Unable to sync slave: %s.  Trying to resync all...", slave.host)
+
+                self.syncAll()
+
+                return None  # What should we return here?
 
         # Restart sync thread if necessary
         if self.adjustLatency:
