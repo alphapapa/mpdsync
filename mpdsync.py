@@ -1052,8 +1052,7 @@ class Seeker(Master):
                 slave.currentSongAdjustments.append(adjustBy)
                 slave.fileTypeAdjustments[slave.currentSongFiletype].append(adjustBy)
 
-            # Reset song differences (maybe this or just cutting it in
-            # half will help prevent too many consecutive adjustments
+            # Reset song differences
             slave.currentSongDifferences.clear()
 
             return True
