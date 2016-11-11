@@ -1197,12 +1197,11 @@ class Seeker(Master):
             # precaution.
 
             # Use the max and min of the last 10 measurements, but not less than 30ms
-            minimumMaxDifference = max(0.03, (0.5 * max([abs(max(slave.currentSongDifferences[:10])),
-                                                        abs(min(slave.currentSongDifferences[:10]))])))
+            minimumMaxDifference = max(0.030, (0.5 * max(abs(max(slave.currentSongDifferences[:10])),
+                                                         abs(min(slave.currentSongDifferences[:10])))))
 
             if maxDifference < minimumMaxDifference:
-                self.log.debug('maxDifference too small (%s); setting maxDifference to '
-                               'half of the biggest difference', maxDifference)
+                self.log.debug('maxDifference too small (%s); setting maxDifference to half of the biggest difference', maxDifference)
 
                 maxDifference = minimumMaxDifference
 
@@ -1212,7 +1211,7 @@ class Seeker(Master):
             # Use the larger of master or slave ping so the script can
             # run on either one, multiplied by 30 (e.g. a 2 ms LAN
             # ping becomes 60 ms max difference), but not less than 30ms
-            maxDifference = max(0.03, (30 * max([slave.pings.average, self.pings.average])))
+            maxDifference = max(0.030, (30 * max([slave.pings.average, self.pings.average])))
 
             # But don't go over 200 ms; if it's that high, better to
             # just resync again.  But this does not work well for
@@ -1221,15 +1220,15 @@ class Seeker(Master):
             # always by the average ping or average slave adjustment,
             # which basically loops doing the same syncs forever.
             # Sigh.
-            maxDifference = min(0.2, maxDifference)
+            maxDifference = min(0.200, maxDifference)
 
         else:
-            # This shouldn't happen, but if it does, use 0.2 until we
-            # have something better.  0.2 seems like a lot, and for
+            # This shouldn't happen, but if it does, use 200ms until we
+            # have something better.  200ms seems like a lot, and for
             # local files it is, but remote files don't seek as
-            # quickly or consistently, so 0.1 can cause excessive
+            # quickly or consistently, so 100ms can cause excessive
             # reseeking in a short period of time
-            maxDifference = 0.2
+            maxDifference = 0.200
 
         maxDifference = round(maxDifference, 3)
 
