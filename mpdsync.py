@@ -1229,6 +1229,15 @@ class Seeker(Master):
             # reseeking in a short period of time
             maxDifference = 0.200
 
+        if len(slave.currentSongAdjustments) > 3:
+            # Many adjustments means trouble seeking this song.  Begin
+            # increasing the acceptable range by 25ms per adjustment over 3.
+            increase_by = 0.025 * (len(slave.currentSongAdjustments) - 3)
+
+            maxDifference += increase_by
+
+            self.log.debug("More than 3 adjustments; increasing max difference by %s", increase_by)
+
         maxDifference = round(maxDifference, 3)
 
         self.log.debug("maxDifference for slave %s: %s", slave.host, maxDifference)
