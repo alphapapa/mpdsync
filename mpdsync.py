@@ -963,7 +963,7 @@ class Seeker(Master):
                     # the next track (and restart it on track change)
 
                     if self._reseek_necessary(slave):
-                        self._reseek_player(slave)
+                        self._reseek_slave(slave)
                         sleepTime = 2  # Sleep 2 seconds after reseeking
 
                     # Unlock the slave
@@ -993,7 +993,7 @@ class Seeker(Master):
 
             time.sleep(sleepTime)
 
-    def _reseek_player(self, slave):
+    def _reseek_slave(self, slave):
         "Seek slave position to match master's."
 
         # TODO: Idea: Maybe part of the problem is that MPD can't seek
