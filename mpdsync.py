@@ -902,6 +902,8 @@ class Seeker(Master):
         self.sync = False
 
     def start_loop(self):
+        "Start sync thread (_syncLoop)."
+
         self.sync = True
 
         # Remove any stale locks
@@ -922,7 +924,7 @@ class Seeker(Master):
             self.start_loop()
 
     def _syncLoop(self):
-        '''Runs a loop trying to keep the slaves in sync with the master.'''
+        "Run loop keeping slaves' position in sync."
 
         # Run the loop
         while self.sync:
@@ -992,7 +994,7 @@ class Seeker(Master):
             time.sleep(sleepTime)
 
     def _reseek_player(self, slave):
-        '''Seeks the slave to the master's playing position.'''
+        "Seek slave position to match master's."
 
         # TODO: Idea: Maybe part of the problem is that MPD can't seek
         # songs precisely, but only to certain places, like between
@@ -1360,11 +1362,11 @@ def main():
                   [{a: master.slaves[0].fileTypeAdjustments[a]}
                    for a in master.slaves[0].fileTypeAdjustments])
         log.debug("Song adjustments for slave 0: %s",
-                  "\n".join([str(a)
+                  "\n" + "\n".join([str(a)
                              for a in sorted(master.slaves[0].song_adjustments,
                                              key=lambda i: len(i['adjustments']))]))
         log.debug("Song differences for slave 0: %s",
-                  "\n".join([str(a)
+                  "\n" + "\n".join([str(a)
                              for a in sorted(master.slaves[0].song_differences,
                                              key=lambda i: i['differences'].overall_average)]))
 
