@@ -1042,15 +1042,9 @@ class Seeker(Master):
         else:
             # Seek succeeded
 
-            # Don't record adjustment if it's just the average ping.
-            # Additional pings may happen between here and when the
-            # adjustment was calculated, so if the adjustment is very
-            # small, we consider it to be a by-ping adjustment.
-            if adjustBy > 0.010:
-                # It wasn't; record it
-                slave.adjustments.insert(0, adjustBy)
-                slave.currentSongAdjustments.append(adjustBy)
-                slave.fileTypeAdjustments[slave.currentSongFiletype].append(adjustBy)
+            slave.adjustments.insert(0, adjustBy)
+            slave.currentSongAdjustments.append(adjustBy)
+            slave.fileTypeAdjustments[slave.currentSongFiletype].append(adjustBy)
 
             # Reset song differences
             slave.currentSongDifferences.clear()
