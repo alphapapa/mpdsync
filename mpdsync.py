@@ -620,7 +620,7 @@ class Master(Client):
             if not slave.checkConnection():
                 # If it can't reconnect...we can't sync the playlists,
                 # or it will raise an exception
-                raise Exception
+                raise Exception("Unable to reconnect to slave: %s", slave.host)
 
             if not slave.hasBeenSynced:
                 # Do a full sync the first time
