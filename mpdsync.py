@@ -1172,12 +1172,10 @@ class Seeker(Master):
 
         # Calculate maxDifference
         if len(slave.currentSongDifferences) >= 5:
-            # At least 5 measurements for current
-            # song
+            # At least 5 measurements for current song
 
             if len(slave.currentSongDifferences) >= 10:
-                # 10 or more measurements; use one-quarter of the
-                # range
+                # 10 or more measurements; use 1/4 of the range
                 maxDifference = slave.currentSongDifferences.range / 4
 
                 # Add half the average to prevent it from being too
@@ -1186,8 +1184,7 @@ class Seeker(Master):
                 # others it can be consistently 100-200 ms.
                 maxDifference += (abs(slave.currentSongDifferences.average) / 2)
             else:
-                # 5-9 measurements; use one-half of the
-                # range
+                # 5-9 measurements; use 1/2 of the range
                 maxDifference = slave.currentSongDifferences.range / 2
 
             # Use at least half of the biggest difference to prevent
