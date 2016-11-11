@@ -31,6 +31,9 @@ MAX_ADJUSTMENTS = 5
 # Max adjustment size in ms (larger than this will trigger an adjustment by ping)
 MAX_ADJUSTMENT = 0.300
 
+# Stop reseeking when average difference gets below:
+MIN_DIFFERENCE = 0.030
+
 # ** Classes
 class MyFloat(float):
     '''Rounds and pads to 3 decimal places when printing.  Also overrides
@@ -1163,6 +1166,14 @@ class Seeker(Master):
             self.log.debug("Less than 3 measurements; not seeking")
 
             return False
+
+        # Commenting out for now.  Not sure if it's really necessary now that we have backing-off.
+        # if (len(slave.currentSongDifferences) >= 5 and current_difference < MIN_DIFFERENCE):
+        #     self.log.debug("Average difference %s < %s; not seeking this song anymore", current_difference, MIN_DIFFERENCE)
+
+        #     slave.currentSongShouldSeek = False
+
+        #     return False
 
         if (current_difference > max_difference
             and abs(slave.currentSongDifferences[0]) > max_difference):
