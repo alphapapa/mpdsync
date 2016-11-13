@@ -570,7 +570,7 @@ class Master(Client):
             # "Difference" is approximately aligned with the average
             # below in the debug output
             self.log.debug('Master/%s elapsed:%s/%s  Difference:%s',
-                      slave.host, self.elapsed, slave.elapsed, difference)
+                           slave.host, self.elapsed, slave.elapsed, difference)
             self.log.debug(slave.currentSongDifferences)
             self.log.debug(slave.currentSongAdjustments)
 
