@@ -144,7 +144,7 @@ class AveragedList(list):
 
         # "Moving range" of first 10 elements (necessary for properly
         # setting the max difference)
-        self.range = MyFloat(max(self[:10]) - min(self[:10]))
+        self.range = MyFloat(max(to_average) - min(to_average))
 
         if self.printDebug:
             self.log.debug(self)
