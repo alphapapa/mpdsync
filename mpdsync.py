@@ -504,9 +504,9 @@ class Master(Client):
 
         self.seeker = None
 
-    def _current_difference(self, slave):
-        '''Compares the master's and the slave's playing position and sets
-        their attributes accordingly, then returns the difference.'''
+    def _average_difference(self, slave):
+        """Return absolute value of average difference between slave and
+        master, recording data in attributes as side-effect."""
 
         # TODO: Some songs MPD seems unable to sync properly.  If the
         # seek value is higher than a certain position, it will always
@@ -807,7 +807,7 @@ class Master(Client):
                     # the same song at the right place
                     if (slave.playing
                         and slave.song == self.song
-                        and self._current_difference(slave) < 1):
+                        and self._average_difference(slave) < 1):
 
                         self.log.debug('Slave %s and master already playing same song, less than 1 second apart',
                                        slave.host)
@@ -832,7 +832,7 @@ class Master(Client):
 
                         # Wait a moment and then check the difference
                         time.sleep(0.2)
-                        playLatency = self._current_difference(slave)
+                        playLatency = self._average_difference(slave)
 
                         if not playLatency:
                             # This probably means the slave isn't playing at all for some reason
@@ -1159,7 +1159,7 @@ class Seeker(Master):
 
             return False
 
-        current_difference = self._current_difference(slave)
+        average_difference = self._average_difference(slave)  # Absolute value
         max_difference = self._max_difference(slave)
 
         if len(slave.currentSongDifferences) < 3:
@@ -1168,17 +1168,17 @@ class Seeker(Master):
             return False
 
         # Commenting out for now.  Not sure if it's really necessary now that we have backing-off.
-        # if (len(slave.currentSongDifferences) >= 5 and current_difference < MIN_DIFFERENCE):
-        #     self.log.debug("Average difference %s < %s; not seeking this song anymore", current_difference, MIN_DIFFERENCE)
+        # if (len(slave.currentSongDifferences) >= 5 and average_difference < MIN_DIFFERENCE):
+        #     self.log.debug("Average difference %s < %s; not seeking this song anymore", average_difference, MIN_DIFFERENCE)
 
         #     slave.currentSongShouldSeek = False
 
         #     return False
 
-        if (current_difference > max_difference
+        if (average_difference > max_difference
             and abs(slave.currentSongDifferences[0]) > max_difference):
-            # Current and average difference too large; reseek
-            self.log.debug("Average difference (%s) > max difference (%s); reseeking..." % (current_difference, max_difference))
+            # Average and current difference too large; reseek
+            self.log.debug("Average difference (%s) > max difference (%s); reseeking..." % (average_difference, max_difference))
 
             return True
         else:
