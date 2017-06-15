@@ -820,7 +820,7 @@ class Master(Client):
                         try:
                             slave.seek(self.song, self.elapsed)
                         except Exception as e:
-                            self.log.exception("Couldn't seek slave %s:", slave.host, e)
+                            self.log.exception("Couldn't seek slave %s: %s", slave.host, e)
 
                             return False
 
