@@ -265,7 +265,7 @@ class Client(mpd.MPDClient):
         the ping time.'''
 
         # Reset initial values
-        for val, attrs in self.initAttrs.iteritems():
+        for val, attrs in self.initAttrs.items():
             for attr in attrs:
                 setattr(self, attr, val)
 
