@@ -17,7 +17,7 @@ import mpd  # Using python-mpd2
 
 # Verify python-mpd2 is being used
 if mpd.VERSION < (0, 5, 4):
-    print 'ERROR: This script requires python-mpd2 >= 0.5.4.'
+    print('ERROR: This script requires python-mpd2 >= 0.5.4.')
     sys.exit(1)
 
 # ** Constants
