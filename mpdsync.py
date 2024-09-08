@@ -1289,7 +1289,7 @@ def main():
                         dest="adjustLatency", action="store_true",
                         help="Monitor latency between master and slaves and try to keep slaves' "
                              "playing position in sync with the master's")
-    parser.add_argument("-v", "--verbose", action="count", dest="verbose", help="Be verbose, up to -vvv")
+    parser.add_argument("-v", "--verbose", action="count", default=0, dest="verbose", help="Be verbose, up to -vvv")
     args = parser.parse_args()
 
     # Setup logging
