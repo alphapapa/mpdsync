@@ -48,10 +48,15 @@ class MyFloat(float):
     # float, you have to also override those built-in methods to keep
     # returning the subclass.
 
-    def __new__(cls, num, roundBy=3):
-        instance = super().__new__(cls, num)
-        instance.roundBy = roundBy
-        return instance
+    if sys.version_info[0] < 3:
+        def __init__(self, num, roundBy=3):
+            super(MyFloat, self).__init__(num)
+            self.roundBy = roundBy
+    else:
+        def __new__(cls, num, roundBy=3):
+            instance = super().__new__(cls, num)
+            instance.roundBy = roundBy
+            return instance
 
     def __abs__(self):
         return MyFloat(float.__abs__(self))
@@ -94,10 +99,10 @@ class AveragedList(list):
 
         # TODO: Isn't there a more Pythonic way to do this?
         if data:
-            super().__init__(data)
+            super(AveragedList, self).__init__(data)
             self._updateStats()
         else:
-            super().__init__()
+            super(AveragedList, self).__init__()
 
     def __str__(self):
         return 'name:%s length:%s overall-average:%s moving-average:%s range:%s max:%s min:%s' % (
@@ -107,7 +112,7 @@ class AveragedList(list):
 
     def append(self, arg):
         arg = MyFloat(arg)
-        super().append(arg)
+        super(AveragedList, self).append(arg)
         self._updateStats()
 
     def clear(self):
@@ -118,12 +123,12 @@ class AveragedList(list):
 
     def extend(self, *args):
         args = [[MyFloat(a) for l in args for a in l]]
-        super().extend(*args)
+        super(AveragedList, self).extend(*args)
         self._updateStats()
 
     def insert(self, pos, *args):
         args = [MyFloat(a) for a in args]
-        super().insert(pos, *args)
+        super(AveragedList, self).insert(pos, *args)
 
         # Remove elements if length is limited
         while (self.length
@@ -166,7 +171,7 @@ class Client(mpd.MPDClient):
     def __init__(self, host, port=DEFAULT_PORT, password=None, latency=None,
                  logger=None):
 
-        super().__init__()
+        super(Client, self).__init__()
 
         # Command timeout
         self.timeout = 10
@@ -223,7 +228,7 @@ class Client(mpd.MPDClient):
     def ping(self):
         '''Pings the daemon and records how long it took.'''
 
-        self.pings.insert(0, timeFunction(super().ping))
+        self.pings.insert(0, timeFunction(super(Client, self).ping))
 
     def checkConnection(self):
         '''Pings the daemon and tries to reconnect if necessary.'''
@@ -270,10 +275,10 @@ class Client(mpd.MPDClient):
             for attr in attrs:
                 setattr(self, attr, val)
 
-        super().connect(self.host, self.port)
+        super(Client, self).connect(self.host, self.port)
 
         if self.password:
-            super().password(self.password)
+            super(Client, self).password(self.password)
 
         self.testPing()
 
@@ -282,21 +287,21 @@ class Client(mpd.MPDClient):
     def disconnect(self):
         "Disconnect from MPD."
 
-        super().disconnect()
+        super(Client, self).disconnect()
 
         self.log.debug("Disconnected.")
 
     def getPlaylist(self):
         '''Gets the playlist from the daemon.'''
 
-        self.playlist = super().playlist()
+        self.playlist = super(Client, self).playlist()
 
         self.log.debug("Got playlist")
 
     def pause(self):
         '''Pauses the daemon and tracks the playing state.'''
 
-        super().pause()
+        super(Client, self).pause()
         self.playing = False
         self.paused = True
 
@@ -364,7 +369,7 @@ class Client(mpd.MPDClient):
                 self.seek(self.song, self.elapsed + offset)
 
             # Issue the play command
-            super().play()
+            super(Client, self).play()
 
             # Execute command list
             try:
@@ -379,7 +384,7 @@ class Client(mpd.MPDClient):
             self.log.debug("%s.play(initial=False)", self.host)
 
             # Issue the play command
-            result = super().play()
+            result = super(Client, self).play()
 
         # TODO: Not sure if this is still necessary to track...
         self.playedSinceLastPlaylistUpdate = True
@@ -392,12 +397,12 @@ class Client(mpd.MPDClient):
 
         self.song = song
         self.elapsed = elapsed
-        super().seek(self.song, self.elapsed)
+        super(Client, self).seek(self.song, self.elapsed)
 
     def status(self):
         '''Gets daemon's status and updates local attributes.'''
 
-        self.currentStatus = super().status()
+        self.currentStatus = super(Client, self).status()
 
         # Wrap whole thing in try/except because of MPD protocol
         # errors.  But I may have fixed this by "locking" each client
@@ -497,7 +502,7 @@ class Master(Client):
         else:
             self.adjustLatency = None
 
-        super().__init__(*args, **kwargs)
+        super(Master, self).__init__(*args, **kwargs)
 
         self.slaves = []
         self.slaveDifferences = AveragedList(name='slaveDifferences', length=10)
@@ -581,7 +586,7 @@ class Master(Client):
         '''Gets the master's status and updates its playlistVersion
         attribute.'''
 
-        super().status()
+        super(Master, self).status()
 
         # Use the master's reported playlist version (for the slaves
         # we update it manually to match the master)
@@ -906,7 +911,7 @@ class Seeker(Master):
     # relevant to the seeker and takes some time.
 
     def __init__(self, master):
-        super().__init__(master.host, logger=master.log)
+        super(Seeker, self).__init__(master.host, logger=master.log)
 
         # By doing this, we don't have to run status() in the loop,
         # because it can get the master's playing status from the
