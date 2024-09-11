@@ -17,7 +17,7 @@ import mpd  # Using python-mpd2
 
 # Verify python-mpd2 is being used
 if mpd.VERSION < (0, 5, 4):
-    print 'ERROR: This script requires python-mpd2 >= 0.5.4.'
+    print('ERROR: This script requires python-mpd2 >= 0.5.4.')
     sys.exit(1)
 
 # ** Constants
@@ -48,9 +48,15 @@ class MyFloat(float):
     # float, you have to also override those built-in methods to keep
     # returning the subclass.
 
-    def __init__(self, num, roundBy=3):
-        super(MyFloat, self).__init__(num)
-        self.roundBy = roundBy
+    if sys.version_info[0] < 3:
+        def __init__(self, num, roundBy=3):
+            super(MyFloat, self).__init__(num)
+            self.roundBy = roundBy
+    else:
+        def __new__(cls, num, roundBy=3):
+            instance = super().__new__(cls, num)
+            instance.roundBy = roundBy
+            return instance
 
     def __abs__(self):
         return MyFloat(float.__abs__(self))
@@ -265,7 +271,7 @@ class Client(mpd.MPDClient):
         the ping time.'''
 
         # Reset initial values
-        for val, attrs in self.initAttrs.iteritems():
+        for val, attrs in self.initAttrs.items():
             for attr in attrs:
                 setattr(self, attr, val)
 
@@ -1289,7 +1295,7 @@ def main():
                         dest="adjustLatency", action="store_true",
                         help="Monitor latency between master and slaves and try to keep slaves' "
                              "playing position in sync with the master's")
-    parser.add_argument("-v", "--verbose", action="count", dest="verbose", help="Be verbose, up to -vvv")
+    parser.add_argument("-v", "--verbose", action="count", default=0, dest="verbose", help="Be verbose, up to -vvv")
     args = parser.parse_args()
 
     # Setup logging
